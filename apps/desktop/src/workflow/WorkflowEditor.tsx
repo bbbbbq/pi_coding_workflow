@@ -36,7 +36,11 @@ import "./workflowEditor.css";
 const storageKey = "pi-workflow.definition.v1";
 const nodeTypes = { "workflow-node": WorkflowNodeCard };
 
-export function WorkflowEditor() {
+interface WorkflowEditorProps {
+  onWorkflowSaved?: (definition: WorkflowDefinition) => void;
+}
+
+export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
   const { t } = useTranslation();
   const initialDefinition = useMemo(loadInitialDefinition, []);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>(
@@ -110,10 +114,12 @@ export function WorkflowEditor() {
   }
 
   function saveWorkflow() {
-    window.localStorage.setItem(storageKey, JSON.stringify({
+    const savedDefinition = {
       ...definition,
       updatedAt: new Date().toISOString(),
-    }));
+    };
+    window.localStorage.setItem(storageKey, JSON.stringify(savedDefinition));
+    onWorkflowSaved?.(savedDefinition);
     setSaveState("saved");
   }
 
@@ -125,6 +131,7 @@ export function WorkflowEditor() {
     setWorkflowName(example.name);
     setSelectedNodeId(undefined);
     window.localStorage.removeItem(storageKey);
+    onWorkflowSaved?.(example);
     setSaveState("draft");
   }
 
@@ -203,7 +210,7 @@ export function WorkflowEditor() {
             <small>{t("builder.canvasHint")}</small>
           </div>
           <ReactFlow
-            colorMode="dark"
+            colorMode="light"
             defaultEdgeOptions={{
               markerEnd: { type: MarkerType.ArrowClosed, color: "#687060" },
               style: { stroke: "#687060", strokeWidth: 1.5 },
@@ -232,10 +239,10 @@ export function WorkflowEditor() {
             onPaneClick={() => setSelectedNodeId(undefined)}
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="#30362d" gap={28} size={1} />
+            <Background color="#dce4dc" gap={28} size={1} />
             <Controls showInteractive={false} />
             <MiniMap
-              maskColor="rgba(9, 11, 8, 0.82)"
+              maskColor="rgba(238, 242, 236, 0.76)"
               nodeColor={(node) => workflowNodeVisuals[(node.data as WorkflowCanvasNode["data"]).workflowNode.type].color}
               pannable
               zoomable
@@ -327,8 +334,12 @@ function toWorkflowDefinition(
 }
 
 function loadInitialDefinition(): WorkflowDefinition {
+  return getStoredWorkflowDefinition() ?? createExampleWorkflow();
+}
+
+export function getStoredWorkflowDefinition(): WorkflowDefinition | undefined {
   const savedDefinition = window.localStorage.getItem(storageKey);
-  if (!savedDefinition) return createExampleWorkflow();
+  if (!savedDefinition) return undefined;
 
   try {
     const parsed = JSON.parse(savedDefinition) as Partial<WorkflowDefinition>;
@@ -344,5 +355,5 @@ function loadInitialDefinition(): WorkflowDefinition {
     window.localStorage.removeItem(storageKey);
   }
 
-  return createExampleWorkflow();
+  return undefined;
 }

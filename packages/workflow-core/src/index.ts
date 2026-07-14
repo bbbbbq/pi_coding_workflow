@@ -8,6 +8,12 @@ import type {
   WorkflowValidationResult,
 } from "@pi-workflow/contracts";
 
+export {
+  advanceWorkflowSchedule,
+  calculateNextRunAt,
+  isWorkflowScheduleDue,
+} from "./schedule.js";
+
 export interface WorkflowNodePorts {
   inputs: string[];
   outputs: string[];

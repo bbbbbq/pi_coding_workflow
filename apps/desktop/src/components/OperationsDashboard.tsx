@@ -1,9 +1,9 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 type RunStatus = "running" | "review" | "complete";
 
-type Run = {
+export type Run = {
   id: string;
   title?: string;
   titleKey?: string;
@@ -11,6 +11,10 @@ type Run = {
   status: RunStatus;
   updatedAtKey: string;
 };
+
+interface OperationsDashboardProps {
+  scheduledRuns?: Run[];
+}
 
 const workflowStepKeys = [
   "workflow.steps.prepare",
@@ -27,17 +31,27 @@ const initialRuns: Run[] = [
   { id: "RUN-040", titleKey: "runs.mock.configParser", repository: "core/config", status: "complete", updatedAtKey: "runs.time.oneHour" },
 ];
 
-export function OperationsDashboard() {
+export function OperationsDashboard({ scheduledRuns = [] }: OperationsDashboardProps) {
   const { t } = useTranslation();
   const [repository, setRepository] = useState("/Users/you/code/project");
   const [task, setTask] = useState("");
-  const [runs, setRuns] = useState(initialRuns);
-  const [selectedRun, setSelectedRun] = useState(initialRuns[0].id);
+  const [manualRuns, setManualRuns] = useState<Run[]>([]);
+  const [selectedRun, setSelectedRun] = useState(
+    () => scheduledRuns[0]?.id ?? initialRuns[0].id,
+  );
+  const runs = useMemo(
+    () => [...scheduledRuns, ...manualRuns, ...initialRuns],
+    [manualRuns, scheduledRuns],
+  );
 
   const activeRun = useMemo(
     () => runs.find((run) => run.id === selectedRun) ?? runs[0],
     [runs, selectedRun],
   );
+
+  useEffect(() => {
+    if (scheduledRuns[0]) setSelectedRun(scheduledRuns[0].id);
+  }, [scheduledRuns]);
 
   function startRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,7 +65,7 @@ export function OperationsDashboard() {
       updatedAtKey: "runs.time.now",
     };
 
-    setRuns((current) => [nextRun, ...current]);
+    setManualRuns((current) => [nextRun, ...current]);
     setSelectedRun(nextId);
   }
 

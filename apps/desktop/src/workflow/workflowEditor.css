@@ -43,7 +43,7 @@
   min-height: 39px;
   padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--paper);
   font-size: 10px;
@@ -54,7 +54,7 @@
 .builder-save-button {
   border-color: var(--acid);
   background: var(--acid);
-  color: var(--ink);
+  color: #ffffff;
 }
 
 .builder-statusbar {
@@ -64,10 +64,11 @@
   gap: 18px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  background: rgba(21, 24, 19, 0.92);
+  border-radius: 6px;
+  background: var(--surface);
   color: var(--muted);
   font-size: 9px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -92,11 +93,11 @@
 }
 
 .builder-statusbar .is-invalid {
-  color: #ff807a;
+  color: var(--danger);
 }
 
 .builder-statusbar .is-invalid i {
-  background: #ff807a;
+  background: var(--danger);
 }
 
 .builder-layout {
@@ -111,7 +112,8 @@
 .builder-inspector,
 .validation-panel {
   border: 1px solid var(--line);
-  background: rgba(21, 24, 19, 0.94);
+  border-radius: 7px;
+  background: var(--surface);
 }
 
 .node-library {
@@ -151,15 +153,16 @@
   gap: 8px;
   padding: 8px;
   border: 1px solid transparent;
-  border-radius: 2px;
-  background: #11140f;
+  border-radius: 6px;
+  background: transparent;
   text-align: left;
   cursor: pointer;
   transition: border-color 140ms ease, transform 140ms ease;
 }
 
 .node-library-list button:hover:not(:disabled) {
-  border-color: #51594a;
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
   transform: translateX(2px);
 }
 
@@ -201,7 +204,7 @@
   min-width: 0;
   position: relative;
   overflow: hidden;
-  background: #0c0f0b;
+  background: #f8faf7;
 }
 
 .canvas-caption {
@@ -229,7 +232,7 @@
 .workflow-canvas .react-flow__controls {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 6px;
   box-shadow: none;
 }
 
@@ -241,8 +244,8 @@
 
 .workflow-canvas .react-flow__minimap {
   border: 1px solid var(--line);
-  border-radius: 2px;
-  background: #0f120e;
+  border-radius: 6px;
+  background: #f8faf7;
 }
 
 .workflow-canvas .react-flow__edge.selected path {
@@ -257,10 +260,10 @@
   gap: 7px;
   position: relative;
   padding: 12px 15px 13px 17px;
-  border: 1px solid #3c4338;
-  border-radius: 3px;
-  background: linear-gradient(145deg, #1b1f19, #121510);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(24, 33, 27, 0.08);
   transition: border-color 130ms ease, box-shadow 130ms ease;
 }
 
@@ -276,7 +279,7 @@
 
 .canvas-node.is-selected {
   border-color: var(--node-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-accent) 16%, transparent), 0 13px 30px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-accent) 13%, transparent), 0 8px 22px rgba(24, 33, 27, 0.11);
 }
 
 .canvas-node-head {
@@ -295,7 +298,7 @@
   color: var(--node-accent);
   font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -320,8 +323,8 @@
   gap: 8px;
   overflow: hidden;
   padding-top: 5px;
-  border-top: 1px solid #2e342b;
-  color: #737c6d;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
   font-size: 7px;
   text-transform: uppercase;
 }
@@ -333,7 +336,7 @@
 .canvas-handle {
   width: 9px;
   height: 9px;
-  border: 2px solid #0d100c;
+  border: 2px solid #ffffff;
   background: var(--node-accent);
 }
 
@@ -385,7 +388,7 @@
   height: 30px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--node-accent) 55%, transparent);
-  border-radius: 2px;
+  border-radius: 6px;
   color: var(--node-accent);
 }
 
@@ -407,9 +410,9 @@
   min-height: 38px;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 2px;
+  border-radius: 6px;
   outline: none;
-  background: #10130f;
+  background: #ffffff;
   color: var(--paper);
   font: inherit;
   font-size: 10px;
@@ -426,7 +429,7 @@
   gap: 8px;
   color: var(--muted);
   font-size: 8px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -440,10 +443,10 @@
 .delete-node-button {
   min-height: 37px;
   margin-top: auto;
-  border: 1px solid rgba(255, 128, 122, 0.35);
-  border-radius: 2px;
-  background: rgba(255, 128, 122, 0.05);
-  color: #ff918c;
+  border: 1px solid #e8c6c6;
+  border-radius: 6px;
+  background: #fff7f7;
+  color: var(--danger);
   font-size: 9px;
   cursor: pointer;
 }
@@ -470,11 +473,11 @@
 }
 
 .validation-panel li.error span {
-  color: #ff807a;
+  color: var(--danger);
 }
 
 .validation-panel li.warning span {
-  color: #f3d36a;
+  color: #a16207;
 }
 
 .validation-empty {

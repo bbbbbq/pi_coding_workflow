@@ -37,3 +37,5 @@ pnpm dev:worker
 ## Current scope
 
 The repository contains the first executable desktop shell and compile-checked Workflow/Pi integration skeleton. Repository cloning, isolated sandboxes, validation command profiles, and pull-request delivery are deliberately left for the next implementation stage.
+
+The desktop app also supports locally persisted one-time, daily, and weekly schedules. These schedules start runs while the desktop app remains open. Always-on execution after the app exits should use Temporal Schedules in the orchestrator layer.
