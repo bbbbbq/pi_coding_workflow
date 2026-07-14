@@ -3,7 +3,6 @@ import {
   Background,
   Controls,
   MarkerType,
-  MiniMap,
   ReactFlow,
   addEdge,
   reconnectEdge,
@@ -25,7 +24,7 @@ import {
   workflowNodePorts,
 } from "@pi-workflow/workflow-core";
 import { useTranslation } from "react-i18next";
-import { workflowNodeCatalog, workflowNodeVisuals } from "./catalog";
+import { workflowNodeCatalog } from "./catalog";
 import { createExampleWorkflow } from "./exampleWorkflow";
 import { NodeInspector } from "./NodeInspector";
 import {
@@ -257,12 +256,6 @@ export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEd
           >
             <Background color="#dce4dc" gap={28} size={1} />
             <Controls showInteractive={false} />
-            <MiniMap
-              maskColor="rgba(238, 242, 236, 0.76)"
-              nodeColor={(node) => workflowNodeVisuals[(node.data as WorkflowCanvasNode["data"]).workflowNode.type].color}
-              pannable
-              zoomable
-            />
           </ReactFlow>
         </div>
 

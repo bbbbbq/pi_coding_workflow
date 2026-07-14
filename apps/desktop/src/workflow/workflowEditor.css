@@ -247,12 +247,6 @@
   fill: var(--paper);
 }
 
-.workflow-canvas .react-flow__minimap {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #f8faf7;
-}
-
 .workflow-canvas .react-flow__edge.selected path {
   stroke: var(--acid) !important;
   stroke-width: 2.3;
