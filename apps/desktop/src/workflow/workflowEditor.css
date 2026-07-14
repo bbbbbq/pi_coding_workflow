@@ -250,6 +250,23 @@
 
 .workflow-canvas .react-flow__edge.selected path {
   stroke: var(--acid) !important;
+  stroke-width: 2.3;
+}
+
+.workflow-canvas .react-flow__edge {
+  cursor: pointer;
+}
+
+.workflow-canvas .react-flow__edgeupdater {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+}
+
+.workflow-canvas .react-flow__edge:hover .react-flow__edgeupdater,
+.workflow-canvas .react-flow__edge.selected .react-flow__edgeupdater {
+  fill: #ffffff;
+  stroke: var(--acid);
 }
 
 .canvas-node {

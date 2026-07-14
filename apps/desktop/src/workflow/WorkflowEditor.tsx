@@ -6,6 +6,7 @@ import {
   MiniMap,
   ReactFlow,
   addEdge,
+  reconnectEdge,
   useEdgesState,
   useNodesState,
   type Connection,
@@ -73,6 +74,15 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
       style: { stroke: "#687060", strokeWidth: 1.5 },
       type: "smoothstep",
     }, currentEdges));
+    setSaveState("draft");
+  }, [setEdges]);
+
+  const onReconnect = useCallback((edge: Edge, connection: Connection) => {
+    if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) {
+      return;
+    }
+
+    setEdges((currentEdges) => reconnectEdge(edge, connection, currentEdges));
     setSaveState("draft");
   }, [setEdges]);
 
@@ -218,6 +228,7 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
             }}
             deleteKeyCode={["Backspace", "Delete"]}
             edges={edges}
+            edgesReconnectable
             fitView
             fitViewOptions={{ padding: 0.16 }}
             maxZoom={1.5}
@@ -237,7 +248,9 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
               }
             }}
             onPaneClick={() => setSelectedNodeId(undefined)}
+            onReconnect={onReconnect}
             proOptions={{ hideAttribution: true }}
+            reconnectRadius={12}
           >
             <Background color="#dce4dc" gap={28} size={1} />
             <Controls showInteractive={false} />

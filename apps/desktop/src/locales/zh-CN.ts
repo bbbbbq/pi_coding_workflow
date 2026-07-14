@@ -75,7 +75,7 @@ export default {
     draft: "本地草稿",
     saved: "已保存到本地",
     canvasTitle: "执行流程图",
-    canvasHint: "拖动布局 · 连接端口 · 选择节点进行配置",
+    canvasHint: "拖动布局 · 连接或拖动线条端点 · 选择节点进行配置",
     outputPorts: "输出端口",
     deleteNode: "删除选中节点",
     library: {

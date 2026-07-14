@@ -75,7 +75,7 @@ export default {
     draft: "Local draft",
     saved: "Saved locally",
     canvasTitle: "Execution graph",
-    canvasHint: "Drag to arrange · connect handles · select to configure",
+    canvasHint: "Drag to arrange · connect or drag line ends · select to configure",
     outputPorts: "Output ports",
     deleteNode: "Delete selected node",
     library: {
