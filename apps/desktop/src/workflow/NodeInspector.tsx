@@ -301,6 +301,31 @@ function renderNodeConfiguration(
         </>
       );
 
+    case "delay":
+      return (
+        <>
+          <NumberField
+            label={t("builder.fields.delayDuration")}
+            min={1}
+            value={node.config.duration}
+            onChange={(value) => onChange({ ...node, config: { ...node.config, duration: value } })}
+          />
+          <Field label={t("builder.fields.delayUnit")}>
+            <select
+              value={node.config.unit}
+              onChange={(event) => onChange({
+                ...node,
+                config: { ...node.config, unit: event.target.value as typeof node.config.unit },
+              })}
+            >
+              {option("seconds", t)}
+              {option("minutes", t)}
+              {option("hours", t)}
+            </select>
+          </Field>
+        </>
+      );
+
     case "wait-event":
       return (
         <>

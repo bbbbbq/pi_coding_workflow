@@ -16,6 +16,7 @@ export const workflowNodeCatalog: WorkflowNodeVisual[] = [
   { type: "loop", icon: "↻", color: "#c2413b", labelKey: "builder.nodes.loop.label", descriptionKey: "builder.nodes.loop.description" },
   { type: "parallel", icon: "∥", color: "#7c3aed", labelKey: "builder.nodes.parallel.label", descriptionKey: "builder.nodes.parallel.description" },
   { type: "human", icon: "◎", color: "#be185d", labelKey: "builder.nodes.human.label", descriptionKey: "builder.nodes.human.description" },
+  { type: "delay", icon: "◴", color: "#0369a1", labelKey: "builder.nodes.delay.label", descriptionKey: "builder.nodes.delay.description" },
   { type: "wait-event", icon: "◷", color: "#0f766e", labelKey: "builder.nodes.waitEvent.label", descriptionKey: "builder.nodes.waitEvent.description" },
   { type: "subworkflow", icon: "⤴", color: "#1d4ed8", labelKey: "builder.nodes.subworkflow.label", descriptionKey: "builder.nodes.subworkflow.description" },
   { type: "end", icon: "■", color: "#59635c", labelKey: "builder.nodes.end.label", descriptionKey: "builder.nodes.end.description" },

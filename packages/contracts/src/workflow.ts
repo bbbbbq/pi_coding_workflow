@@ -6,6 +6,7 @@ export const workflowNodeTypes = [
   "loop",
   "parallel",
   "human",
+  "delay",
   "wait-event",
   "subworkflow",
   "end",
@@ -55,6 +56,15 @@ export interface HumanNodeConfig {
   timeoutHours?: number;
 }
 
+export const delayUnits = ["seconds", "minutes", "hours"] as const;
+
+export type DelayUnit = (typeof delayUnits)[number];
+
+export interface DelayNodeConfig {
+  duration: number;
+  unit: DelayUnit;
+}
+
 export interface WaitEventNodeConfig {
   waitType: "duration" | "datetime" | "webhook" | "external_event";
   durationSeconds?: number;
@@ -79,6 +89,7 @@ export interface WorkflowNodeConfigMap {
   loop: LoopNodeConfig;
   parallel: ParallelNodeConfig;
   human: HumanNodeConfig;
+  delay: DelayNodeConfig;
   "wait-event": WaitEventNodeConfig;
   subworkflow: SubworkflowNodeConfig;
   end: EndNodeConfig;

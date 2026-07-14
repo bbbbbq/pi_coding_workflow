@@ -1,4 +1,5 @@
 import type {
+  DelayNodeConfig,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
@@ -27,6 +28,7 @@ export const workflowNodePorts: Record<WorkflowNodeType, WorkflowNodePorts> = {
   loop: { inputs: ["input"], outputs: ["continue", "exhausted"] },
   parallel: { inputs: ["input"], outputs: ["completed", "failed"] },
   human: { inputs: ["input"], outputs: ["approved", "rejected"] },
+  delay: { inputs: ["input"], outputs: ["completed"] },
   "wait-event": { inputs: ["input"], outputs: ["completed", "timeout"] },
   subworkflow: { inputs: ["input"], outputs: ["completed", "failed"] },
   end: { inputs: ["input"], outputs: [] },
@@ -66,6 +68,10 @@ export function defaultNodeConfig<Type extends WorkflowNodeType>(
       description: "Review the workflow output before it continues.",
       timeoutHours: 24,
     },
+    delay: {
+      duration: 5,
+      unit: "minutes",
+    },
     "wait-event": {
       waitType: "duration",
       durationSeconds: 60,
@@ -79,6 +85,15 @@ export function defaultNodeConfig<Type extends WorkflowNodeType>(
   };
 
   return structuredClone(configs[type]);
+}
+
+export function getDelayDurationMilliseconds(config: DelayNodeConfig): number {
+  const unitMilliseconds: Record<DelayNodeConfig["unit"], number> = {
+    seconds: 1_000,
+    minutes: 60_000,
+    hours: 3_600_000,
+  };
+  return config.duration * unitMilliseconds[config.unit];
 }
 
 export function createWorkflowNode<Type extends WorkflowNodeType>(input: {
@@ -126,6 +141,12 @@ export function validateWorkflowDefinition(
     }
     if (node.type === "pi-agent" && (node.config.maxTurns < 1 || node.config.maxTurns > 200)) {
       issues.push({ severity: "error", code: "agent_turn_limit", message: "Pi Agent max turns must be between 1 and 200.", nodeId: node.id });
+    }
+    if (node.type === "delay" && (!Number.isFinite(node.config.duration) || node.config.duration <= 0)) {
+      issues.push({ severity: "error", code: "delay_duration", message: "Delay duration must be greater than zero.", nodeId: node.id });
+    }
+    if (node.type === "delay" && !["seconds", "minutes", "hours"].includes(node.config.unit)) {
+      issues.push({ severity: "error", code: "delay_unit", message: "Delay unit is invalid.", nodeId: node.id });
     }
     if (node.type === "subworkflow" && node.config.workflowId.trim().length === 0) {
       issues.push({ severity: "error", code: "subworkflow_id", message: "Subworkflow ID is required.", nodeId: node.id });

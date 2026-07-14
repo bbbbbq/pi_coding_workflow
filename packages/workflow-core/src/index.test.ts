@@ -3,6 +3,7 @@ import test from "node:test";
 import type { WorkflowDefinition, WorkflowNodeType } from "@pi-workflow/contracts";
 import {
   createWorkflowNode,
+  getDelayDurationMilliseconds,
   validateWorkflowDefinition,
   workflowNodePorts,
 } from "./index.js";
@@ -15,12 +16,13 @@ const nodeTypes: WorkflowNodeType[] = [
   "loop",
   "parallel",
   "human",
+  "delay",
   "wait-event",
   "subworkflow",
   "end",
 ];
 
-function createTenNodeWorkflow(): WorkflowDefinition {
+function createElevenNodeWorkflow(): WorkflowDefinition {
   const nodes = nodeTypes.map((type, index) => createWorkflowNode({
     id: `node-${index}`,
     type,
@@ -37,7 +39,7 @@ function createTenNodeWorkflow(): WorkflowDefinition {
 
   return {
     id: "test-workflow",
-    name: "Ten node workflow",
+    name: "Eleven node workflow",
     version: 1,
     nodes,
     edges,
@@ -45,14 +47,14 @@ function createTenNodeWorkflow(): WorkflowDefinition {
   };
 }
 
-test("validates a workflow containing all ten supported node types", () => {
-  const result = validateWorkflowDefinition(createTenNodeWorkflow());
+test("validates a workflow containing all eleven supported node types", () => {
+  const result = validateWorkflowDefinition(createElevenNodeWorkflow());
   assert.equal(result.valid, true);
   assert.deepEqual(result.issues.filter((issue) => issue.severity === "error"), []);
 });
 
 test("rejects a workflow without an end node", () => {
-  const workflow = createTenNodeWorkflow();
+  const workflow = createElevenNodeWorkflow();
   workflow.nodes = workflow.nodes.filter((node) => node.type !== "end");
   const result = validateWorkflowDefinition(workflow);
   assert.equal(result.valid, false);
@@ -60,10 +62,21 @@ test("rejects a workflow without an end node", () => {
 });
 
 test("rejects an unbounded loop configuration", () => {
-  const workflow = createTenNodeWorkflow();
+  const workflow = createElevenNodeWorkflow();
   const loop = workflow.nodes.find((node) => node.type === "loop");
   if (loop?.type === "loop") loop.config.maxIterations = 0;
   const result = validateWorkflowDefinition(workflow);
   assert.equal(result.valid, false);
   assert.ok(result.issues.some((issue) => issue.code === "loop_limit"));
+});
+
+test("converts delay units and rejects non-positive durations", () => {
+  assert.equal(getDelayDurationMilliseconds({ duration: 2, unit: "minutes" }), 120_000);
+
+  const workflow = createElevenNodeWorkflow();
+  const delay = workflow.nodes.find((node) => node.type === "delay");
+  if (delay?.type === "delay") delay.config.duration = 0;
+  const result = validateWorkflowDefinition(workflow);
+  assert.equal(result.valid, false);
+  assert.ok(result.issues.some((issue) => issue.code === "delay_duration"));
 });
