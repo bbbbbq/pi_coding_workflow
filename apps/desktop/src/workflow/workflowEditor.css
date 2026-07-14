@@ -259,7 +259,7 @@
 .workflow-canvas .react-flow__edgeupdater {
   fill: transparent;
   stroke: transparent;
-  stroke-width: 2;
+  stroke-width: 1.5;
 }
 
 .workflow-canvas .react-flow__edge:hover .react-flow__edgeupdater,
@@ -350,10 +350,20 @@
 }
 
 .canvas-handle {
+  z-index: 3;
   width: 9px;
   height: 9px;
   border: 2px solid #ffffff;
   background: var(--node-accent);
+}
+
+.canvas-attachment-handle {
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  opacity: 0;
 }
 
 .canvas-handle-input {

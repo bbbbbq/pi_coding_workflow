@@ -118,8 +118,10 @@ export interface WorkflowEdge {
   id: string;
   sourceNodeId: string;
   sourcePort: string;
+  sourceAttachment?: string;
   targetNodeId: string;
   targetPort: string;
+  targetAttachment?: string;
 }
 
 export interface WorkflowDefinition {

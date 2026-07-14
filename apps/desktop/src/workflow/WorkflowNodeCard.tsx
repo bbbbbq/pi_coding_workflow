@@ -15,6 +15,9 @@ export type WorkflowCanvasNodeData = {
 
 export type WorkflowCanvasNode = Node<WorkflowCanvasNodeData, "workflow-node">;
 
+const attachmentOffsets = [8, 22, 36, 50, 64, 78, 92];
+const attachmentSides = [Position.Top, Position.Right, Position.Bottom, Position.Left];
+
 export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNode>) {
   const { t } = useTranslation();
   const node = data.workflowNode;
@@ -36,6 +39,34 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
           title={t(`builder.ports.${port}`)}
           type="target"
         />
+      ))}
+
+      {ports.inputs.length > 0 && attachmentSides.flatMap((position) => (
+        attachmentOffsets.map((offset) => (
+          <Handle
+            className="canvas-attachment-handle"
+            id={attachmentHandleId("target", position, offset)}
+            isConnectableStart={false}
+            key={`target-${position}-${offset}`}
+            position={position}
+            style={attachmentHandleStyle(position, offset)}
+            type="target"
+          />
+        ))
+      ))}
+
+      {ports.outputs.length > 0 && attachmentSides.flatMap((position) => (
+        attachmentOffsets.map((offset) => (
+          <Handle
+            className="canvas-attachment-handle"
+            id={attachmentHandleId("source", position, offset)}
+            isConnectableStart={false}
+            key={`source-${position}-${offset}`}
+            position={position}
+            style={attachmentHandleStyle(position, offset)}
+            type="source"
+          />
+        ))
       ))}
 
       <div className="canvas-node-head">
@@ -62,4 +93,14 @@ export function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowCanvasNod
       </div>
     </div>
   );
+}
+
+function attachmentHandleId(type: "source" | "target", position: Position, offset: number): string {
+  return `__attach-${type}-${position}-${offset}`;
+}
+
+function attachmentHandleStyle(position: Position, offset: number): React.CSSProperties {
+  return position === Position.Left || position === Position.Right
+    ? { top: `${offset}%` }
+    : { left: `${offset}%` };
 }

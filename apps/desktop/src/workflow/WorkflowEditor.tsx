@@ -35,6 +35,13 @@ import "./workflowEditor.css";
 
 const nodeTypes = { "workflow-node": WorkflowNodeCard };
 
+type WorkflowCanvasEdgeData = {
+  sourcePort: string;
+  targetPort: string;
+} & Record<string, unknown>;
+
+type WorkflowCanvasEdge = Edge<WorkflowCanvasEdgeData>;
+
 interface WorkflowEditorProps {
   initialDefinition: WorkflowDefinition;
   onWorkflowSave: (definition: WorkflowDefinition) => Promise<WorkflowDefinition>;
@@ -45,7 +52,7 @@ export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEd
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>(
     initialDefinition.nodes.map(toCanvasNode),
   );
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
+  const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowCanvasEdge>(
     initialDefinition.edges.map(toCanvasEdge),
   );
   const [workflowName, setWorkflowName] = useState(initialDefinition.name);
@@ -65,24 +72,64 @@ export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEd
       return;
     }
 
+    const sourceNode = nodes.find((node) => node.id === connection.source);
+    const targetNode = nodes.find((node) => node.id === connection.target);
+    if (!sourceNode || !targetNode) return;
+
+    const sourcePort = resolvePort(
+      connection.sourceHandle,
+      workflowNodePorts[sourceNode.data.workflowNode.type].outputs,
+    );
+    const targetPort = resolvePort(
+      connection.targetHandle,
+      workflowNodePorts[targetNode.data.workflowNode.type].inputs,
+    );
+    if (!sourcePort || !targetPort) return;
+
     setEdges((currentEdges) => addEdge({
       ...connection,
+      data: { sourcePort, targetPort },
       id: `edge-${crypto.randomUUID()}`,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#687060" },
       style: { stroke: "#687060", strokeWidth: 1.5 },
       type: "smoothstep",
     }, currentEdges));
     setSaveState("draft");
-  }, [setEdges]);
+  }, [nodes, setEdges]);
 
-  const onReconnect = useCallback((edge: Edge, connection: Connection) => {
+  const onReconnect = useCallback((edge: WorkflowCanvasEdge, connection: Connection) => {
     if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) {
       return;
     }
 
-    setEdges((currentEdges) => reconnectEdge(edge, connection, currentEdges));
+    const sourceNode = nodes.find((node) => node.id === connection.source);
+    const targetNode = nodes.find((node) => node.id === connection.target);
+    if (!sourceNode || !targetNode) return;
+
+    const sourcePort = resolveReconnectedPort(
+      connection.sourceHandle,
+      connection.source === edge.source ? edge.data?.sourcePort : undefined,
+      workflowNodePorts[sourceNode.data.workflowNode.type].outputs,
+    );
+    const targetPort = resolveReconnectedPort(
+      connection.targetHandle,
+      connection.target === edge.target ? edge.data?.targetPort : undefined,
+      workflowNodePorts[targetNode.data.workflowNode.type].inputs,
+    );
+    if (!sourcePort || !targetPort) return;
+
+    const updatedEdge: WorkflowCanvasEdge = {
+      ...edge,
+      data: { ...edge.data, sourcePort, targetPort },
+    };
+    setEdges((currentEdges) => reconnectEdge(
+      updatedEdge,
+      connection,
+      currentEdges,
+      { shouldReplaceId: false },
+    ));
     setSaveState("draft");
-  }, [setEdges]);
+  }, [nodes, setEdges]);
 
   function addNode(type: WorkflowNodeType) {
     if (type === "trigger" && triggerExists) return;
@@ -252,7 +299,7 @@ export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEd
             onPaneClick={() => setSelectedNodeId(undefined)}
             onReconnect={onReconnect}
             proOptions={{ hideAttribution: true }}
-            reconnectRadius={12}
+            reconnectRadius={6}
           >
             <Background color="#dce4dc" gap={28} size={1} />
             <Controls showInteractive={false} />
@@ -299,13 +346,17 @@ function toCanvasNode(node: WorkflowNode): WorkflowCanvasNode {
   };
 }
 
-function toCanvasEdge(edge: WorkflowEdge): Edge {
+function toCanvasEdge(edge: WorkflowEdge): WorkflowCanvasEdge {
   return {
+    data: {
+      sourcePort: edge.sourcePort,
+      targetPort: edge.targetPort,
+    },
     id: edge.id,
     source: edge.sourceNodeId,
-    sourceHandle: edge.sourcePort,
+    sourceHandle: edge.sourceAttachment ?? edge.sourcePort,
     target: edge.targetNodeId,
-    targetHandle: edge.targetPort,
+    targetHandle: edge.targetAttachment ?? edge.targetPort,
     markerEnd: { type: MarkerType.ArrowClosed, color: "#687060" },
     style: { stroke: "#687060", strokeWidth: 1.5 },
     type: "smoothstep",
@@ -316,7 +367,7 @@ function toWorkflowDefinition(
   id: string,
   name: string,
   nodes: WorkflowCanvasNode[],
-  edges: Edge[],
+  edges: WorkflowCanvasEdge[],
 ): WorkflowDefinition {
   return {
     id,
@@ -333,11 +384,36 @@ function toWorkflowDefinition(
       return [{
         id: edge.id,
         sourceNodeId: edge.source,
-        sourcePort: edge.sourceHandle ?? workflowNodePorts[source.data.workflowNode.type].outputs[0] ?? "",
+        sourcePort: edge.data?.sourcePort
+          ?? resolvePort(edge.sourceHandle, workflowNodePorts[source.data.workflowNode.type].outputs)
+          ?? "",
+        sourceAttachment: isAttachmentHandle(edge.sourceHandle) ? edge.sourceHandle : undefined,
         targetNodeId: edge.target,
-        targetPort: edge.targetHandle ?? workflowNodePorts[target.data.workflowNode.type].inputs[0] ?? "",
+        targetPort: edge.data?.targetPort
+          ?? resolvePort(edge.targetHandle, workflowNodePorts[target.data.workflowNode.type].inputs)
+          ?? "",
+        targetAttachment: isAttachmentHandle(edge.targetHandle) ? edge.targetHandle : undefined,
       }];
     }),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function isAttachmentHandle(handle?: string | null): handle is string {
+  return handle?.startsWith("__attach-") === true;
+}
+
+function resolvePort(handle: string | null | undefined, ports: string[]): string | undefined {
+  return handle && !isAttachmentHandle(handle) && ports.includes(handle)
+    ? handle
+    : ports[0];
+}
+
+function resolveReconnectedPort(
+  handle: string,
+  previousPort: string | undefined,
+  ports: string[],
+): string | undefined {
+  if (!isAttachmentHandle(handle)) return resolvePort(handle, ports);
+  return previousPort && ports.includes(previousPort) ? previousPort : ports[0];
 }
