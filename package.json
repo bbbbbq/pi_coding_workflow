@@ -7,6 +7,7 @@
     "dev:desktop": "pnpm --filter @pi-workflow/desktop tauri dev",
     "dev:worker": "pnpm --filter @pi-workflow/orchestrator dev",
     "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
   }
 }

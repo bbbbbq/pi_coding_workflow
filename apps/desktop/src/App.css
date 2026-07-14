@@ -111,6 +111,17 @@ button {
   background: var(--surface-raised);
 }
 
+.rail-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rail-button:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
 .rail-button.is-active::after {
   content: "";
   position: absolute;
