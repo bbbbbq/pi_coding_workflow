@@ -7,6 +7,7 @@ export interface WorkflowSchedule {
   name: string;
   workflowId: string;
   workflowName: string;
+  workflowVersion: number;
   frequency: WorkflowScheduleFrequency;
   scheduledAt: string;
   nextRunAt?: string;

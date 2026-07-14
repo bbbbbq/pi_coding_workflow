@@ -23,6 +23,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:pi-workflow.db"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

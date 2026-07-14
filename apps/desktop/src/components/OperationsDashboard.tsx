@@ -1,19 +1,27 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { WorkflowRunRecord } from "@pi-workflow/contracts";
 import { useTranslation } from "react-i18next";
 
-type RunStatus = "running" | "review" | "complete";
+type RunStatus = "running" | "review" | "complete" | "failed";
 
-export type Run = {
+type Run = {
   id: string;
   title?: string;
   titleKey?: string;
   repository: string;
   status: RunStatus;
-  updatedAtKey: string;
+  updatedAtKey?: string;
+  updatedAt?: string;
 };
 
 interface OperationsDashboardProps {
-  scheduledRuns?: Run[];
+  persistedRuns?: WorkflowRunRecord[];
+  onStartRun: (input: StartRunInput) => WorkflowRunRecord;
+}
+
+export interface StartRunInput {
+  repository: string;
+  task: string;
 }
 
 const workflowStepKeys = [
@@ -31,17 +39,17 @@ const initialRuns: Run[] = [
   { id: "RUN-040", titleKey: "runs.mock.configParser", repository: "core/config", status: "complete", updatedAtKey: "runs.time.oneHour" },
 ];
 
-export function OperationsDashboard({ scheduledRuns = [] }: OperationsDashboardProps) {
-  const { t } = useTranslation();
+export function OperationsDashboard({ persistedRuns = [], onStartRun }: OperationsDashboardProps) {
+  const { t, i18n } = useTranslation();
   const [repository, setRepository] = useState("/Users/you/code/project");
   const [task, setTask] = useState("");
-  const [manualRuns, setManualRuns] = useState<Run[]>([]);
+  const storedRuns = useMemo(() => persistedRuns.map(toDashboardRun), [persistedRuns]);
   const [selectedRun, setSelectedRun] = useState(
-    () => scheduledRuns[0]?.id ?? initialRuns[0].id,
+    () => storedRuns[0]?.id ?? initialRuns[0].id,
   );
   const runs = useMemo(
-    () => [...scheduledRuns, ...manualRuns, ...initialRuns],
-    [manualRuns, scheduledRuns],
+    () => [...storedRuns, ...initialRuns],
+    [storedRuns],
   );
 
   const activeRun = useMemo(
@@ -50,23 +58,13 @@ export function OperationsDashboard({ scheduledRuns = [] }: OperationsDashboardP
   );
 
   useEffect(() => {
-    if (scheduledRuns[0]) setSelectedRun(scheduledRuns[0].id);
-  }, [scheduledRuns]);
+    if (storedRuns[0]) setSelectedRun(storedRuns[0].id);
+  }, [storedRuns]);
 
   function startRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextId = `RUN-${String(43 + runs.length - initialRuns.length).padStart(3, "0")}`;
-    const title = task.trim().split(/[.!?。！？]/)[0] || t("runs.untitled");
-    const nextRun: Run = {
-      id: nextId,
-      title,
-      repository: repository.split("/").filter(Boolean).slice(-2).join("/") || repository,
-      status: "running",
-      updatedAtKey: "runs.time.now",
-    };
-
-    setManualRuns((current) => [nextRun, ...current]);
-    setSelectedRun(nextId);
+    const run = onStartRun({ repository, task });
+    setSelectedRun(run.id);
   }
 
   return (
@@ -115,7 +113,7 @@ export function OperationsDashboard({ scheduledRuns = [] }: OperationsDashboardP
 
           <ol className="workflow-list">
             {workflowStepKeys.map((stepKey, index) => {
-              const activeIndex = activeRun?.status === "review" ? 5 : activeRun?.status === "complete" ? 6 : 3;
+              const activeIndex = activeRun?.status === "review" ? 5 : activeRun?.status === "running" ? 3 : 6;
               const state = index < activeIndex ? "done" : index === activeIndex ? "active" : "waiting";
               const stateKey = state === "done" ? "done" : state === "active" ? "working" : "queued";
               return (
@@ -158,11 +156,40 @@ export function OperationsDashboard({ scheduledRuns = [] }: OperationsDashboardP
                 <small>{run.repository}</small>
               </span>
               <span className={`run-status ${run.status}`}>{t(`status.${run.status}`)}</span>
-              <span className="run-time">{t(run.updatedAtKey)}</span>
+              <span className="run-time">
+                {run.updatedAt
+                  ? formatRunTime(run.updatedAt, i18n.language)
+                  : t(run.updatedAtKey ?? "runs.time.now")}
+              </span>
             </button>
           ))}
         </div>
       </section>
     </>
   );
+}
+
+function toDashboardRun(run: WorkflowRunRecord): Run {
+  return {
+    id: run.id,
+    title: run.title,
+    repository: run.repository,
+    status: run.status === "review"
+      ? "review"
+      : run.status === "completed"
+        ? "complete"
+        : run.status === "failed" || run.status === "cancelled"
+          ? "failed"
+          : "running",
+    updatedAt: run.updatedAt,
+  };
+}
+
+function formatRunTime(value: string, language: string): string {
+  const elapsedSeconds = Math.round((new Date(value).getTime() - Date.now()) / 1_000);
+  const formatter = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
+  if (Math.abs(elapsedSeconds) < 60) return formatter.format(elapsedSeconds, "second");
+  const elapsedMinutes = Math.round(elapsedSeconds / 60);
+  if (Math.abs(elapsedMinutes) < 60) return formatter.format(elapsedMinutes, "minute");
+  return formatter.format(Math.round(elapsedMinutes / 60), "hour");
 }

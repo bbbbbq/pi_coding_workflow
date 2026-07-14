@@ -73,6 +73,7 @@ export default {
     nodesCount: "nodes",
     connectionsCount: "connections",
     draft: "Local draft",
+    saving: "Saving to SQLite",
     saved: "Saved locally",
     canvasTitle: "Execution graph",
     canvasHint: "Drag to arrange · connect or drag line ends · select to configure",
@@ -259,6 +260,7 @@ export default {
     running: "Running",
     review: "Needs review",
     complete: "Complete",
+    failed: "Failed",
     idle: "Idle",
   },
 } as const;

@@ -571,6 +571,12 @@ textarea:focus {
   background: #fff7f0;
 }
 
+.run-status.failed {
+  color: var(--danger);
+  border-color: #e8c6c6;
+  background: #fff7f7;
+}
+
 @media (max-width: 1020px) {
   .command-grid {
     grid-template-columns: 1fr;

@@ -8,13 +8,17 @@ import {
   calculateNextRunAt,
   isWorkflowScheduleDue,
 } from "@pi-workflow/workflow-core";
-
-const storageKey = "pi-workflow.schedules.v1";
+import {
+  deleteScheduleRecord,
+  listSchedules,
+  saveSchedule,
+} from "../storage/repository";
 
 export interface CreateWorkflowScheduleInput {
   name: string;
   workflowId: string;
   workflowName: string;
+  workflowVersion: number;
   frequency: WorkflowScheduleFrequency;
   scheduledAt: string;
   timeZone: string;
@@ -22,7 +26,7 @@ export interface CreateWorkflowScheduleInput {
 export function useWorkflowSchedules(
   onDue: (schedule: WorkflowSchedule) => void,
 ) {
-  const [schedules, setSchedules] = useState<WorkflowSchedule[]>(loadSchedules);
+  const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   const schedulesRef = useRef(schedules);
   const onDueRef = useRef(onDue);
   onDueRef.current = onDue;
@@ -30,8 +34,17 @@ export function useWorkflowSchedules(
   const replaceSchedules = useCallback((next: WorkflowSchedule[]) => {
     schedulesRef.current = next;
     setSchedules(next);
-    window.localStorage.setItem(storageKey, JSON.stringify(next));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSchedules().then((savedSchedules) => {
+      if (!cancelled) replaceSchedules(savedSchedules);
+    }).catch(reportScheduleStorageError);
+    return () => {
+      cancelled = true;
+    };
+  }, [replaceSchedules]);
 
   useEffect(() => {
     const tick = () => {
@@ -44,9 +57,13 @@ export function useWorkflowSchedules(
       if (dueIds.size === 0) return;
 
       const dueSchedules = schedulesRef.current.filter((schedule) => dueIds.has(schedule.id));
-      replaceSchedules(schedulesRef.current.map((schedule) => (
+      const next = schedulesRef.current.map((schedule) => (
         dueIds.has(schedule.id) ? advanceWorkflowSchedule(schedule, now) : schedule
-      )));
+      ));
+      replaceSchedules(next);
+      next.filter((schedule) => dueIds.has(schedule.id)).forEach((schedule) => {
+        void saveSchedule(schedule).catch(reportScheduleStorageError);
+      });
       dueSchedules.forEach((schedule) => onDueRef.current(schedule));
     };
 
@@ -73,15 +90,18 @@ export function useWorkflowSchedules(
       updatedAt: now.toISOString(),
     };
     replaceSchedules([schedule, ...schedulesRef.current]);
+    void saveSchedule(schedule).catch(reportScheduleStorageError);
     return true;
   }, [replaceSchedules]);
 
   const toggleSchedule = useCallback((scheduleId: string) => {
     const now = new Date();
-    replaceSchedules(schedulesRef.current.map((schedule) => {
+    let updatedSchedule: WorkflowSchedule | undefined;
+    const next = schedulesRef.current.map((schedule) => {
       if (schedule.id !== scheduleId) return schedule;
       if (schedule.enabled) {
-        return { ...schedule, enabled: false, updatedAt: now.toISOString() };
+        updatedSchedule = { ...schedule, enabled: false, updatedAt: now.toISOString() };
+        return updatedSchedule;
       }
 
       const nextRunAt = calculateNextRunAt({
@@ -91,37 +111,21 @@ export function useWorkflowSchedules(
         hasRun: schedule.frequency === "once" && Boolean(schedule.lastRunAt),
       });
       if (!nextRunAt) return schedule;
-      return { ...schedule, enabled: true, nextRunAt, updatedAt: now.toISOString() };
-    }));
+      updatedSchedule = { ...schedule, enabled: true, nextRunAt, updatedAt: now.toISOString() };
+      return updatedSchedule;
+    });
+    replaceSchedules(next);
+    if (updatedSchedule) void saveSchedule(updatedSchedule).catch(reportScheduleStorageError);
   }, [replaceSchedules]);
 
   const deleteSchedule = useCallback((scheduleId: string) => {
     replaceSchedules(schedulesRef.current.filter((schedule) => schedule.id !== scheduleId));
+    void deleteScheduleRecord(scheduleId).catch(reportScheduleStorageError);
   }, [replaceSchedules]);
 
   return { schedules, createSchedule, toggleSchedule, deleteSchedule };
 }
 
-function loadSchedules(): WorkflowSchedule[] {
-  const saved = window.localStorage.getItem(storageKey);
-  if (!saved) return [];
-
-  try {
-    const parsed = JSON.parse(saved) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isWorkflowSchedule);
-  } catch {
-    window.localStorage.removeItem(storageKey);
-    return [];
-  }
-}
-
-function isWorkflowSchedule(value: unknown): value is WorkflowSchedule {
-  if (!value || typeof value !== "object") return false;
-  const schedule = value as Partial<WorkflowSchedule>;
-  return typeof schedule.id === "string"
-    && typeof schedule.workflowId === "string"
-    && typeof schedule.workflowName === "string"
-    && typeof schedule.scheduledAt === "string"
-    && (schedule.frequency === "once" || schedule.frequency === "daily" || schedule.frequency === "weekly");
+function reportScheduleStorageError(error: unknown): void {
+  console.error("Failed to persist workflow schedule", error);
 }

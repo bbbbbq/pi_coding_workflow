@@ -34,16 +34,15 @@ import {
 } from "./WorkflowNodeCard";
 import "./workflowEditor.css";
 
-const storageKey = "pi-workflow.definition.v1";
 const nodeTypes = { "workflow-node": WorkflowNodeCard };
 
 interface WorkflowEditorProps {
-  onWorkflowSaved?: (definition: WorkflowDefinition) => void;
+  initialDefinition: WorkflowDefinition;
+  onWorkflowSave: (definition: WorkflowDefinition) => Promise<WorkflowDefinition>;
 }
 
-export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
+export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEditorProps) {
   const { t } = useTranslation();
-  const initialDefinition = useMemo(loadInitialDefinition, []);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>(
     initialDefinition.nodes.map(toCanvasNode),
   );
@@ -52,7 +51,7 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
   );
   const [workflowName, setWorkflowName] = useState(initialDefinition.name);
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
-  const [saveState, setSaveState] = useState<"draft" | "saved">("draft");
+  const [saveState, setSaveState] = useState<"draft" | "saving" | "saved">("saved");
 
   const definition = useMemo(
     () => toWorkflowDefinition(initialDefinition.id, workflowName, nodes, edges),
@@ -123,14 +122,15 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
     setSaveState("draft");
   }
 
-  function saveWorkflow() {
-    const savedDefinition = {
-      ...definition,
-      updatedAt: new Date().toISOString(),
-    };
-    window.localStorage.setItem(storageKey, JSON.stringify(savedDefinition));
-    onWorkflowSaved?.(savedDefinition);
-    setSaveState("saved");
+  async function saveWorkflow() {
+    setSaveState("saving");
+    try {
+      await onWorkflowSave(definition);
+      setSaveState("saved");
+    } catch (error) {
+      console.error("Failed to save workflow", error);
+      setSaveState("draft");
+    }
   }
 
   function resetWorkflow() {
@@ -140,8 +140,6 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
     setEdges(example.edges.map(toCanvasEdge));
     setWorkflowName(example.name);
     setSelectedNodeId(undefined);
-    window.localStorage.removeItem(storageKey);
-    onWorkflowSaved?.(example);
     setSaveState("draft");
   }
 
@@ -168,7 +166,12 @@ export function WorkflowEditor({ onWorkflowSaved }: WorkflowEditorProps) {
           <button className="builder-secondary-button" onClick={resetWorkflow} type="button">
             {t("builder.reset")}
           </button>
-          <button className="builder-save-button" onClick={saveWorkflow} type="button">
+          <button
+            className="builder-save-button"
+            disabled={saveState === "saving"}
+            onClick={() => void saveWorkflow()}
+            type="button"
+          >
             {t("builder.save")}
           </button>
         </div>
@@ -344,29 +347,4 @@ function toWorkflowDefinition(
     }),
     updatedAt: new Date().toISOString(),
   };
-}
-
-function loadInitialDefinition(): WorkflowDefinition {
-  return getStoredWorkflowDefinition() ?? createExampleWorkflow();
-}
-
-export function getStoredWorkflowDefinition(): WorkflowDefinition | undefined {
-  const savedDefinition = window.localStorage.getItem(storageKey);
-  if (!savedDefinition) return undefined;
-
-  try {
-    const parsed = JSON.parse(savedDefinition) as Partial<WorkflowDefinition>;
-    if (
-      typeof parsed.id === "string"
-      && typeof parsed.name === "string"
-      && Array.isArray(parsed.nodes)
-      && Array.isArray(parsed.edges)
-    ) {
-      return parsed as WorkflowDefinition;
-    }
-  } catch {
-    window.localStorage.removeItem(storageKey);
-  }
-
-  return undefined;
 }

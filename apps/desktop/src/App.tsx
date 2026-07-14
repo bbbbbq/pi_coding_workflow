@@ -1,5 +1,9 @@
-import { useCallback, useState } from "react";
-import type { WorkflowDefinition, WorkflowSchedule } from "@pi-workflow/contracts";
+import { useCallback, useEffect, useState } from "react";
+import type {
+  WorkflowDefinition,
+  WorkflowRunRecord,
+  WorkflowSchedule,
+} from "@pi-workflow/contracts";
 import {
   CalendarClock,
   History,
@@ -7,24 +11,31 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { OperationsDashboard, type Run } from "./components/OperationsDashboard";
+import {
+  OperationsDashboard,
+  type StartRunInput,
+} from "./components/OperationsDashboard";
 import type { SupportedLanguage } from "./i18n";
 import { ScheduleManager } from "./schedules/ScheduleManager";
 import { useWorkflowSchedules } from "./schedules/useWorkflowSchedules";
+import {
+  getLatestWorkflowDefinition,
+  initializePersistence,
+  listRuns,
+  saveRun,
+  saveWorkflowDefinition,
+} from "./storage/repository";
 import { createExampleWorkflow } from "./workflow/exampleWorkflow";
-import { getStoredWorkflowDefinition, WorkflowEditor } from "./workflow/WorkflowEditor";
+import { WorkflowEditor } from "./workflow/WorkflowEditor";
 import "./App.css";
 
 type AppView = "builder" | "schedules" | "runs";
-const scheduledRunsStorageKey = "pi-workflow.scheduled-runs.v1";
 
 function App() {
   const { t, i18n } = useTranslation();
   const [activeView, setActiveView] = useState<AppView>("builder");
-  const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowDefinition>(
-    () => getStoredWorkflowDefinition() ?? createExampleWorkflow(),
-  );
-  const [scheduledRuns, setScheduledRuns] = useState<Run[]>(loadScheduledRuns);
+  const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowDefinition>(createExampleWorkflow);
+  const [persistedRuns, setPersistedRuns] = useState<WorkflowRunRecord[]>([]);
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
     : "en";
@@ -33,20 +44,66 @@ function App() {
     void i18n.changeLanguage(language);
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await initializePersistence();
+      const savedWorkflow = await getLatestWorkflowDefinition();
+      const workflow = savedWorkflow ?? await saveWorkflowDefinition(createExampleWorkflow());
+      const runs = await listRuns();
+      if (!cancelled) {
+        setCurrentWorkflow(workflow);
+        setPersistedRuns(runs);
+      }
+    })().catch((error) => console.error("Failed to initialize persistence", error));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persistWorkflow = useCallback(async (definition: WorkflowDefinition) => {
+    const saved = await saveWorkflowDefinition(definition);
+    setCurrentWorkflow(saved);
+    return saved;
+  }, []);
+
   const startScheduledWorkflow = useCallback((schedule: WorkflowSchedule) => {
-    const run: Run = {
+    const now = new Date().toISOString();
+    const run: WorkflowRunRecord = {
       id: `RUN-${Date.now().toString(36).toUpperCase()}`,
+      workflowId: schedule.workflowId,
+      workflowVersion: schedule.workflowVersion,
+      scheduleId: schedule.id,
+      trigger: "schedule",
       title: schedule.workflowName,
       repository: schedule.name,
       status: "running",
-      updatedAtKey: "runs.time.now",
+      startedAt: now,
+      updatedAt: now,
     };
-    setScheduledRuns((current) => {
-      const next = [run, ...current].slice(0, 50);
-      window.localStorage.setItem(scheduledRunsStorageKey, JSON.stringify(next));
-      return next;
-    });
+    setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
+    void saveRun(run).catch((error) => console.error("Failed to save scheduled run", error));
   }, []);
+
+  const startManualWorkflow = useCallback((input: StartRunInput) => {
+    const now = new Date().toISOString();
+    const title = input.task.trim().split(/[.!?。！？]/)[0] || t("runs.untitled");
+    const run: WorkflowRunRecord = {
+      id: `RUN-${Date.now().toString(36).toUpperCase()}`,
+      workflowId: currentWorkflow.id,
+      workflowVersion: currentWorkflow.version,
+      trigger: "manual",
+      title,
+      repository: input.repository.split("/").filter(Boolean).slice(-2).join("/") || input.repository,
+      task: input.task,
+      status: "running",
+      startedAt: now,
+      updatedAt: now,
+    };
+    setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
+    void saveRun(run).catch((error) => console.error("Failed to save manual run", error));
+    return run;
+  }, [currentWorkflow, t]);
 
   const { schedules, createSchedule, toggleSchedule, deleteSchedule } =
     useWorkflowSchedules(startScheduledWorkflow);
@@ -124,34 +181,34 @@ function App() {
         </header>
 
         {activeView === "builder" && (
-          <WorkflowEditor onWorkflowSaved={setCurrentWorkflow} />
+          <WorkflowEditor
+            initialDefinition={currentWorkflow}
+            key={`${currentWorkflow.id}:${currentWorkflow.version}:${currentWorkflow.updatedAt}`}
+            onWorkflowSave={persistWorkflow}
+          />
         )}
         {activeView === "schedules" && (
           <ScheduleManager
-            workflow={{ id: currentWorkflow.id, name: currentWorkflow.name }}
+            workflow={{
+              id: currentWorkflow.id,
+              name: currentWorkflow.name,
+              version: currentWorkflow.version,
+            }}
             schedules={schedules}
             onCreate={createSchedule}
             onToggle={toggleSchedule}
             onDelete={deleteSchedule}
           />
         )}
-        {activeView === "runs" && <OperationsDashboard scheduledRuns={scheduledRuns} />}
+        {activeView === "runs" && (
+          <OperationsDashboard
+            onStartRun={startManualWorkflow}
+            persistedRuns={persistedRuns}
+          />
+        )}
       </main>
     </div>
   );
 }
 
 export default App;
-
-function loadScheduledRuns(): Run[] {
-  const saved = window.localStorage.getItem(scheduledRunsStorageKey);
-  if (!saved) return [];
-
-  try {
-    const parsed = JSON.parse(saved) as unknown;
-    return Array.isArray(parsed) ? parsed as Run[] : [];
-  } catch {
-    window.localStorage.removeItem(scheduledRunsStorageKey);
-    return [];
-  }
-}

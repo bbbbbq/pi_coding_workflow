@@ -36,6 +36,7 @@ test("marks a due one-time schedule complete after it runs", () => {
     name: "Morning repair",
     workflowId: "coding-workflow",
     workflowName: "Coding workflow",
+    workflowVersion: 1,
     frequency: "once",
     scheduledAt: "2026-07-15T09:00:00.000Z",
     nextRunAt: "2026-07-15T09:00:00.000Z",

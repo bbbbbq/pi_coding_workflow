@@ -17,7 +17,7 @@ import type { CreateWorkflowScheduleInput } from "./useWorkflowSchedules";
 import "./scheduleManager.css";
 
 interface ScheduleManagerProps {
-  workflow: { id: string; name: string };
+  workflow: { id: string; name: string; version: number };
   schedules: WorkflowSchedule[];
   onCreate: (input: CreateWorkflowScheduleInput) => boolean;
   onToggle: (scheduleId: string) => void;
@@ -49,6 +49,7 @@ export function ScheduleManager({
       name: name.trim() || `${workflow.name} · ${t(`schedules.frequency.${frequency}`)}`,
       workflowId: workflow.id,
       workflowName: workflow.name,
+      workflowVersion: workflow.version,
       frequency,
       scheduledAt: date.toISOString(),
       timeZone,
@@ -104,7 +105,9 @@ export function ScheduleManager({
 
           <label className="schedule-field">
             <span>{t("schedules.form.workflow")}</span>
-            <div className="workflow-readonly"><Workflow size={16} /> {workflow.name}</div>
+            <div className="workflow-readonly">
+              <Workflow size={16} /> {workflow.name} · v{workflow.version}
+            </div>
           </label>
 
           <div className="schedule-field-grid">
@@ -171,7 +174,7 @@ export function ScheduleManager({
                     <div className="schedule-main">
                       <div>
                         <strong>{schedule.name}</strong>
-                        <span>{schedule.workflowName}</span>
+                        <span>{schedule.workflowName} · v{schedule.workflowVersion}</span>
                       </div>
                       <dl>
                         <div>

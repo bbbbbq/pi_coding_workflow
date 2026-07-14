@@ -73,6 +73,7 @@ export default {
     nodesCount: "个节点",
     connectionsCount: "条连接",
     draft: "本地草稿",
+    saving: "正在写入 SQLite",
     saved: "已保存到本地",
     canvasTitle: "执行流程图",
     canvasHint: "拖动布局 · 连接或拖动线条端点 · 选择节点进行配置",
@@ -257,6 +258,7 @@ export default {
     running: "运行中",
     review: "待审核",
     complete: "已完成",
+    failed: "失败",
     idle: "空闲",
   },
 } as const;
