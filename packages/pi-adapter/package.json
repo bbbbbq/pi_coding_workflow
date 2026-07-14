@@ -1,0 +1,19 @@
+{
+  "name": "@pi-workflow/pi-adapter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "pi-coding-workflow",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev:desktop": "pnpm --filter @pi-workflow/desktop tauri dev",
+    "dev:worker": "pnpm --filter @pi-workflow/orchestrator dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck"
+  }
+}
