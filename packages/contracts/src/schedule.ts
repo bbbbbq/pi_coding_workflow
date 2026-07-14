@@ -8,10 +8,13 @@ export interface WorkflowSchedule {
   workflowId: string;
   workflowName: string;
   workflowVersion: number;
+  repositoryPath: string;
+  task: string;
   frequency: WorkflowScheduleFrequency;
   scheduledAt: string;
   nextRunAt?: string;
   lastRunAt?: string;
+  temporalScheduleId?: string;
   timeZone: string;
   enabled: boolean;
   createdAt: string;

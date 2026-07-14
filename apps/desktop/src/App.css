@@ -280,6 +280,15 @@ h3 {
   box-shadow: 0 0 0 4px rgba(47, 129, 85, 0.1);
 }
 
+.runtime-status.is-offline {
+  color: var(--danger);
+}
+
+.runtime-status.is-offline i {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(190, 72, 72, 0.1);
+}
+
 .command-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.8fr);

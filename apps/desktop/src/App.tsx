@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   WorkflowDefinition,
   WorkflowRunRecord,
-  WorkflowSchedule,
 } from "@pi-workflow/contracts";
 import {
   CalendarClock,
@@ -20,11 +19,17 @@ import { ScheduleManager } from "./schedules/ScheduleManager";
 import { useWorkflowSchedules } from "./schedules/useWorkflowSchedules";
 import {
   getLatestWorkflowDefinition,
+  getSetting,
   initializePersistence,
   listRuns,
   saveRun,
+  saveSetting,
   saveWorkflowDefinition,
 } from "./storage/repository";
+import {
+  getTemporalHealth,
+  startTemporalRun,
+} from "./temporal/client";
 import { createExampleWorkflow } from "./workflow/exampleWorkflow";
 import { WorkflowEditor } from "./workflow/WorkflowEditor";
 import "./App.css";
@@ -36,18 +41,25 @@ function App() {
   const [activeView, setActiveView] = useState<AppView>("builder");
   const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowDefinition>(createExampleWorkflow);
   const [persistedRuns, setPersistedRuns] = useState<WorkflowRunRecord[]>([]);
+  const [temporalAvailable, setTemporalAvailable] = useState<boolean | undefined>();
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
     : "en";
 
   function changeLanguage(language: SupportedLanguage) {
     void i18n.changeLanguage(language);
+    void saveSetting("language", language)
+      .catch((error) => console.error("Failed to save language setting", error));
   }
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       await initializePersistence();
+      const savedLanguage = await getSetting("language");
+      if (savedLanguage === "en" || savedLanguage === "zh-CN") {
+        await i18n.changeLanguage(savedLanguage);
+      }
       const savedWorkflow = await getLatestWorkflowDefinition();
       const workflow = savedWorkflow ?? await saveWorkflowDefinition(createExampleWorkflow());
       const runs = await listRuns();
@@ -59,6 +71,25 @@ function App() {
     return () => {
       cancelled = true;
     };
+  }, [i18n]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = () => {
+      void getTemporalHealth()
+        .then(() => {
+          if (!cancelled) setTemporalAvailable(true);
+        })
+        .catch(() => {
+          if (!cancelled) setTemporalAvailable(false);
+        });
+    };
+    check();
+    const timer = window.setInterval(check, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const persistWorkflow = useCallback(async (definition: WorkflowDefinition) => {
@@ -67,28 +98,10 @@ function App() {
     return saved;
   }, []);
 
-  const startScheduledWorkflow = useCallback((schedule: WorkflowSchedule) => {
-    const now = new Date().toISOString();
-    const run: WorkflowRunRecord = {
-      id: `RUN-${Date.now().toString(36).toUpperCase()}`,
-      workflowId: schedule.workflowId,
-      workflowVersion: schedule.workflowVersion,
-      scheduleId: schedule.id,
-      trigger: "schedule",
-      title: schedule.workflowName,
-      repository: schedule.name,
-      status: "running",
-      startedAt: now,
-      updatedAt: now,
-    };
-    setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
-    void saveRun(run).catch((error) => console.error("Failed to save scheduled run", error));
-  }, []);
-
   const startManualWorkflow = useCallback((input: StartRunInput) => {
     const now = new Date().toISOString();
     const title = input.task.trim().split(/[.!?。！？]/)[0] || t("runs.untitled");
-    const run: WorkflowRunRecord = {
+    let run: WorkflowRunRecord = {
       id: `RUN-${Date.now().toString(36).toUpperCase()}`,
       workflowId: currentWorkflow.id,
       workflowVersion: currentWorkflow.version,
@@ -96,17 +109,45 @@ function App() {
       title,
       repository: input.repository.split("/").filter(Boolean).slice(-2).join("/") || input.repository,
       task: input.task,
-      status: "running",
+      status: "queued",
       startedAt: now,
       updatedAt: now,
     };
     setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
     void saveRun(run).catch((error) => console.error("Failed to save manual run", error));
+    void startTemporalRun({
+      runId: run.id,
+      workflowId: currentWorkflow.id,
+      workflowVersion: currentWorkflow.version,
+      repositoryPath: input.repository,
+      task: input.task,
+      requirePlanApproval: false,
+    }).then((remote) => {
+      run = {
+        ...run,
+        status: "running",
+        temporalWorkflowId: remote.workflowId,
+        temporalRunId: remote.runId,
+        updatedAt: new Date().toISOString(),
+      };
+      setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
+      return saveRun(run);
+    }).catch((error: unknown) => {
+      run = {
+        ...run,
+        status: "failed",
+        result: { error: error instanceof Error ? error.message : String(error) },
+        completedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
+      return saveRun(run);
+    }).catch((error) => console.error("Failed to persist Temporal run status", error));
     return run;
   }, [currentWorkflow, t]);
 
   const { schedules, createSchedule, toggleSchedule, deleteSchedule } =
-    useWorkflowSchedules(startScheduledWorkflow);
+    useWorkflowSchedules();
 
   return (
     <div className="app-shell">
@@ -176,7 +217,9 @@ function App() {
                 aria-pressed={currentLanguage === "zh-CN"}
               >中文</button>
             </div>
-            <div className="runtime-status"><i /> {t("header.ready")}</div>
+            <div className={`runtime-status ${temporalAvailable === false ? "is-offline" : ""}`}>
+              <i /> {t(temporalAvailable ? "header.ready" : "header.unavailable")}
+            </div>
           </div>
         </header>
 

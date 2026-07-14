@@ -4,128 +4,160 @@ import type {
   WorkflowScheduleFrequency,
 } from "@pi-workflow/contracts";
 import {
-  advanceWorkflowSchedule,
-  calculateNextRunAt,
-  isWorkflowScheduleDue,
-} from "@pi-workflow/workflow-core";
-import {
   deleteScheduleRecord,
   listSchedules,
   saveSchedule,
 } from "../storage/repository";
+import {
+  describeTemporalSchedule,
+  deleteTemporalSchedule,
+  pauseTemporalSchedule,
+  registerTemporalSchedule,
+  resumeTemporalSchedule,
+} from "../temporal/client";
 
 export interface CreateWorkflowScheduleInput {
   name: string;
   workflowId: string;
   workflowName: string;
   workflowVersion: number;
+  repositoryPath: string;
+  task: string;
   frequency: WorkflowScheduleFrequency;
   scheduledAt: string;
   timeZone: string;
 }
-export function useWorkflowSchedules(
-  onDue: (schedule: WorkflowSchedule) => void,
-) {
+
+export function useWorkflowSchedules() {
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   const schedulesRef = useRef(schedules);
-  const onDueRef = useRef(onDue);
-  onDueRef.current = onDue;
 
   const replaceSchedules = useCallback((next: WorkflowSchedule[]) => {
     schedulesRef.current = next;
     setSchedules(next);
   }, []);
 
+  const refreshTemporalSchedules = useCallback(async () => {
+    const current = schedulesRef.current;
+    const remoteSchedules = await Promise.allSettled(current.map(async (schedule) => {
+      if (!schedule.temporalScheduleId) return schedule;
+      const remote = await describeTemporalSchedule(schedule.temporalScheduleId);
+      return {
+        ...schedule,
+        enabled: !remote.paused && remote.remainingActions !== 0,
+        nextRunAt: remote.nextRunAt,
+        lastRunAt: remote.lastRunAt ?? schedule.lastRunAt,
+      };
+    }));
+    const changed: WorkflowSchedule[] = [];
+    const next = remoteSchedules.map((result, index) => {
+      if (result.status === "rejected") {
+        reportScheduleStorageError(result.reason);
+        return current[index];
+      }
+      const previous = current[index];
+      const refreshed = result.value;
+      if (
+        previous.enabled !== refreshed.enabled
+        || previous.nextRunAt !== refreshed.nextRunAt
+        || previous.lastRunAt !== refreshed.lastRunAt
+      ) changed.push(refreshed);
+      return refreshed;
+    });
+    if (changed.length === 0) return;
+    replaceSchedules(next);
+    await Promise.all(changed.map((schedule) => saveSchedule(schedule)))
+      .catch(reportScheduleStorageError);
+  }, [replaceSchedules]);
+
   useEffect(() => {
     let cancelled = false;
     void listSchedules().then((savedSchedules) => {
-      if (!cancelled) replaceSchedules(savedSchedules);
+      if (!cancelled) {
+        replaceSchedules(savedSchedules);
+        void refreshTemporalSchedules();
+      }
     }).catch(reportScheduleStorageError);
     return () => {
       cancelled = true;
     };
-  }, [replaceSchedules]);
+  }, [refreshTemporalSchedules, replaceSchedules]);
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const dueIds = new Set(
-        schedulesRef.current
-          .filter((schedule) => isWorkflowScheduleDue(schedule, now))
-          .map((schedule) => schedule.id),
-      );
-      if (dueIds.size === 0) return;
-
-      const dueSchedules = schedulesRef.current.filter((schedule) => dueIds.has(schedule.id));
-      const next = schedulesRef.current.map((schedule) => (
-        dueIds.has(schedule.id) ? advanceWorkflowSchedule(schedule, now) : schedule
-      ));
-      replaceSchedules(next);
-      next.filter((schedule) => dueIds.has(schedule.id)).forEach((schedule) => {
-        void saveSchedule(schedule).catch(reportScheduleStorageError);
-      });
-      dueSchedules.forEach((schedule) => onDueRef.current(schedule));
-    };
-
-    tick();
-    const timer = window.setInterval(tick, 1_000);
+    const timer = window.setInterval(() => {
+      void refreshTemporalSchedules();
+    }, 30_000);
     return () => window.clearInterval(timer);
-  }, [replaceSchedules]);
+  }, [refreshTemporalSchedules]);
 
-  const createSchedule = useCallback((input: CreateWorkflowScheduleInput) => {
+  const createSchedule = useCallback(async (input: CreateWorkflowScheduleInput): Promise<boolean> => {
     const now = new Date();
-    const nextRunAt = calculateNextRunAt({
-      frequency: input.frequency,
-      scheduledAt: input.scheduledAt,
-      after: now,
-    });
-    if (!nextRunAt) return false;
+    const scheduledAt = new Date(input.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= now) return false;
 
-    const schedule: WorkflowSchedule = {
+    let schedule: WorkflowSchedule = {
       id: `schedule-${crypto.randomUUID()}`,
       ...input,
-      nextRunAt,
+      nextRunAt: scheduledAt.toISOString(),
       enabled: true,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
+    try {
+      const remote = await registerTemporalSchedule({ schedule });
+      schedule = {
+        ...schedule,
+        temporalScheduleId: remote.scheduleId,
+        enabled: !remote.paused && remote.remainingActions !== 0,
+        nextRunAt: remote.nextRunAt ?? schedule.nextRunAt,
+        lastRunAt: remote.lastRunAt,
+      };
+    } catch (error) {
+      reportScheduleStorageError(error);
+      return false;
+    }
     replaceSchedules([schedule, ...schedulesRef.current]);
-    void saveSchedule(schedule).catch(reportScheduleStorageError);
+    await saveSchedule(schedule).catch(reportScheduleStorageError);
     return true;
   }, [replaceSchedules]);
 
-  const toggleSchedule = useCallback((scheduleId: string) => {
-    const now = new Date();
-    let updatedSchedule: WorkflowSchedule | undefined;
-    const next = schedulesRef.current.map((schedule) => {
-      if (schedule.id !== scheduleId) return schedule;
-      if (schedule.enabled) {
-        updatedSchedule = { ...schedule, enabled: false, updatedAt: now.toISOString() };
-        return updatedSchedule;
-      }
-
-      const nextRunAt = calculateNextRunAt({
-        frequency: schedule.frequency,
-        scheduledAt: schedule.scheduledAt,
-        after: now,
-        hasRun: schedule.frequency === "once" && Boolean(schedule.lastRunAt),
-      });
-      if (!nextRunAt) return schedule;
-      updatedSchedule = { ...schedule, enabled: true, nextRunAt, updatedAt: now.toISOString() };
-      return updatedSchedule;
-    });
-    replaceSchedules(next);
-    if (updatedSchedule) void saveSchedule(updatedSchedule).catch(reportScheduleStorageError);
+  const toggleSchedule = useCallback(async (scheduleId: string): Promise<void> => {
+    const current = schedulesRef.current.find((schedule) => schedule.id === scheduleId);
+    if (!current?.temporalScheduleId) return;
+    try {
+      const remote = current.enabled
+        ? await pauseTemporalSchedule(current.temporalScheduleId)
+        : await resumeTemporalSchedule(current.temporalScheduleId);
+      const updatedSchedule: WorkflowSchedule = {
+        ...current,
+        enabled: !remote.paused && remote.remainingActions !== 0,
+        nextRunAt: remote.nextRunAt,
+        lastRunAt: remote.lastRunAt ?? current.lastRunAt,
+        updatedAt: new Date().toISOString(),
+      };
+      replaceSchedules(schedulesRef.current.map((schedule) => (
+        schedule.id === scheduleId ? updatedSchedule : schedule
+      )));
+      await saveSchedule(updatedSchedule).catch(reportScheduleStorageError);
+    } catch (error) {
+      reportScheduleStorageError(error);
+    }
   }, [replaceSchedules]);
 
-  const deleteSchedule = useCallback((scheduleId: string) => {
-    replaceSchedules(schedulesRef.current.filter((schedule) => schedule.id !== scheduleId));
-    void deleteScheduleRecord(scheduleId).catch(reportScheduleStorageError);
+  const deleteSchedule = useCallback(async (scheduleId: string): Promise<void> => {
+    const schedule = schedulesRef.current.find((item) => item.id === scheduleId);
+    try {
+      if (schedule?.temporalScheduleId) await deleteTemporalSchedule(schedule.temporalScheduleId);
+      replaceSchedules(schedulesRef.current.filter((item) => item.id !== scheduleId));
+      await deleteScheduleRecord(scheduleId).catch(reportScheduleStorageError);
+    } catch (error) {
+      reportScheduleStorageError(error);
+    }
   }, [replaceSchedules]);
 
   return { schedules, createSchedule, toggleSchedule, deleteSchedule };
 }
 
 function reportScheduleStorageError(error: unknown): void {
-  console.error("Failed to persist workflow schedule", error);
+  console.error("Failed to persist Temporal workflow schedule", error);
 }

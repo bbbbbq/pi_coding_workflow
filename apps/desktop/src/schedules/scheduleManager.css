@@ -118,6 +118,7 @@
 
 .schedule-field input,
 .schedule-field select,
+.schedule-field textarea,
 .workflow-readonly {
   width: 100%;
   min-height: 43px;
@@ -131,8 +132,15 @@
   font-size: 13px;
 }
 
+.schedule-field textarea {
+  min-height: 78px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
 .schedule-field input:focus,
-.schedule-field select:focus {
+.schedule-field select:focus,
+.schedule-field textarea:focus {
   border-color: var(--acid);
   box-shadow: 0 0 0 3px rgba(47, 129, 85, 0.09);
 }

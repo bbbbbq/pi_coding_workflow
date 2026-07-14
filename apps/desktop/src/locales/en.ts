@@ -13,12 +13,13 @@ export default {
   header: {
     eyebrow: "LOCAL CODING OPERATIONS",
     supportedPlatforms: "Supported platforms",
-    ready: "Local scheduler online",
+    ready: "Temporal orchestration online",
+    unavailable: "Temporal orchestration offline",
   },
   schedules: {
     index: "02 / SCHEDULES",
     title: "Run workflows on time.",
-    subtitle: "Choose the current saved workflow, set a time, and let the desktop scheduler start it automatically.",
+    subtitle: "Register a durable Temporal Schedule that keeps running when this desktop app is closed.",
     summary: {
       label: "Schedule summary",
       active: "Active",
@@ -31,10 +32,15 @@ export default {
       name: "Schedule name",
       namePlaceholder: "Nightly verification",
       workflow: "Workflow",
+      repository: "Repository path",
+      repositoryPlaceholder: "/Users/you/code/project",
+      task: "Coding task",
+      taskPlaceholder: "Describe the change Pi should implement.",
       frequency: "Frequency",
       runAt: "First run",
-      futureError: "Choose a valid time in the future.",
+      futureError: "Choose a future time and provide a repository path and task. Temporal must be online in the desktop app.",
       create: "Create schedule",
+      creating: "Registering with Temporal",
     },
     frequency: {
       once: "Once",
@@ -43,9 +49,9 @@ export default {
     },
     list: {
       title: "Scheduled workflows",
-      description: "Pause, resume, or remove local schedules.",
+      description: "Pause, resume, or remove schedules stored by Temporal.",
       emptyTitle: "No schedules yet",
-      emptyDescription: "Create a schedule to start the saved workflow automatically at the selected time.",
+      emptyDescription: "Create a durable schedule to start the saved workflow automatically at the selected time.",
       frequency: "Frequency",
       nextRun: "Next run",
       lastRun: "Last run",
@@ -58,7 +64,7 @@ export default {
       resume: "Resume schedule",
       delete: "Delete schedule",
     },
-    runtimeBoundary: "Schedules run while the desktop app is open. Always-on execution should be moved to Temporal Schedules.",
+    runtimeBoundary: "Temporal owns the clock, retries, catch-up, and pause/resume state. Keep the Orchestrator and Temporal Server running after closing this app.",
   },
   builder: {
     index: "01 / WORKFLOW BUILDER",

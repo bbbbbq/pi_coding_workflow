@@ -19,9 +19,9 @@ import "./scheduleManager.css";
 interface ScheduleManagerProps {
   workflow: { id: string; name: string; version: number };
   schedules: WorkflowSchedule[];
-  onCreate: (input: CreateWorkflowScheduleInput) => boolean;
-  onToggle: (scheduleId: string) => void;
-  onDelete: (scheduleId: string) => void;
+  onCreate: (input: CreateWorkflowScheduleInput) => Promise<boolean>;
+  onToggle: (scheduleId: string) => Promise<void>;
+  onDelete: (scheduleId: string) => Promise<void>;
 }
 
 export function ScheduleManager({
@@ -35,30 +35,45 @@ export function ScheduleManager({
   const [name, setName] = useState("");
   const [frequency, setFrequency] = useState<WorkflowScheduleFrequency>("once");
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
+  const [repositoryPath, setRepositoryPath] = useState("/Users/you/code/project");
+  const [task, setTask] = useState("");
   const [formError, setFormError] = useState(false);
+  const [creating, setCreating] = useState(false);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const activeCount = schedules.filter((schedule) => schedule.enabled).length;
   const nextSchedule = useMemo(() => schedules
     .filter((schedule) => schedule.enabled && schedule.nextRunAt)
     .sort((left, right) => left.nextRunAt!.localeCompare(right.nextRunAt!))[0], [schedules]);
 
-  function createSchedule(event: FormEvent<HTMLFormElement>) {
+  async function createSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const date = new Date(scheduledAt);
-    const created = !Number.isNaN(date.getTime()) && onCreate({
-      name: name.trim() || `${workflow.name} · ${t(`schedules.frequency.${frequency}`)}`,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      workflowVersion: workflow.version,
-      frequency,
-      scheduledAt: date.toISOString(),
-      timeZone,
-    });
+    if (Number.isNaN(date.getTime()) || repositoryPath.trim().length === 0 || task.trim().length === 0) {
+      setFormError(true);
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await onCreate({
+        name: name.trim() || `${workflow.name} · ${t(`schedules.frequency.${frequency}`)}`,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        workflowVersion: workflow.version,
+        repositoryPath: repositoryPath.trim(),
+        task: task.trim(),
+        frequency,
+        scheduledAt: date.toISOString(),
+        timeZone,
+      });
 
-    setFormError(!created);
-    if (created) {
-      setName("");
-      setScheduledAt(defaultScheduledAt());
+      setFormError(!created);
+      if (created) {
+        setName("");
+        setTask("");
+        setScheduledAt(defaultScheduledAt());
+      }
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -110,6 +125,26 @@ export function ScheduleManager({
             </div>
           </label>
 
+          <label className="schedule-field">
+            <span>{t("schedules.form.repository")}</span>
+            <input
+              value={repositoryPath}
+              onChange={(event) => setRepositoryPath(event.target.value)}
+              spellCheck={false}
+              placeholder={t("schedules.form.repositoryPlaceholder")}
+            />
+          </label>
+
+          <label className="schedule-field">
+            <span>{t("schedules.form.task")}</span>
+            <textarea
+              value={task}
+              onChange={(event) => setTask(event.target.value)}
+              placeholder={t("schedules.form.taskPlaceholder")}
+              rows={3}
+            />
+          </label>
+
           <div className="schedule-field-grid">
             <label className="schedule-field">
               <span>{t("schedules.form.frequency")}</span>
@@ -144,8 +179,8 @@ export function ScheduleManager({
           <div className="time-zone-note"><Clock3 size={14} /> {timeZone}</div>
           {formError && <p className="schedule-form-error">{t("schedules.form.futureError")}</p>}
 
-          <button className="primary-action" type="submit">
-            <CalendarClock size={17} /> {t("schedules.form.create")}
+          <button className="primary-action" disabled={creating} type="submit">
+            <CalendarClock size={17} /> {t(creating ? "schedules.form.creating" : "schedules.form.create")}
           </button>
         </form>
 
