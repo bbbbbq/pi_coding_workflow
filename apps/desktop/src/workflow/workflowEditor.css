@@ -19,7 +19,7 @@
   max-width: 690px;
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -46,7 +46,7 @@
   border-radius: 6px;
   background: var(--surface);
   color: var(--paper);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -67,7 +67,7 @@
   border-radius: 6px;
   background: var(--surface);
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -136,7 +136,7 @@
   display: inline-block;
   margin-top: 6px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .node-library-list {
@@ -146,7 +146,7 @@
 }
 
 .node-library-list button {
-  min-height: 58px;
+  min-height: 64px;
   display: grid;
   grid-template-columns: 30px 1fr 14px;
   align-items: center;
@@ -183,13 +183,13 @@
 }
 
 .node-library-list strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .node-library-list small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,13 +220,13 @@
 .canvas-caption span {
   color: var(--paper);
   font-family: "Syne Variable", sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .canvas-caption small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .workflow-canvas .react-flow__controls {
@@ -271,8 +271,8 @@
 
 .canvas-node {
   --node-accent: var(--acid);
-  width: 190px;
-  min-height: 116px;
+  width: 205px;
+  min-height: 128px;
   display: grid;
   gap: 7px;
   position: relative;
@@ -313,7 +313,7 @@
 
 .canvas-node-type {
   color: var(--node-accent);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -323,7 +323,7 @@
   overflow: hidden;
   color: var(--paper);
   font-family: "Syne Variable", sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -331,7 +331,7 @@
 .canvas-node > small {
   min-height: 23px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.45;
 }
 
@@ -342,7 +342,7 @@
   padding-top: 5px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 7px;
+  font-size: 9px;
   text-transform: uppercase;
 }
 
@@ -385,7 +385,7 @@
 }
 
 .builder-inspector.is-empty p:last-child {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -432,7 +432,7 @@
   background: #ffffff;
   color: var(--paper);
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .inspector-field textarea {
@@ -445,7 +445,7 @@
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -464,7 +464,7 @@
   border-radius: 6px;
   background: #fff7f7;
   color: var(--danger);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -485,7 +485,7 @@
   grid-template-columns: 15px 1fr;
   gap: 6px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.4;
 }
 
@@ -500,7 +500,7 @@
 .validation-empty {
   margin: 10px 0 0;
   color: var(--acid);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 @media (max-width: 1200px) {

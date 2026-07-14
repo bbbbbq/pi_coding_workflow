@@ -28,6 +28,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-size: 14px;
   overflow-x: hidden;
   background:
     linear-gradient(rgba(24, 33, 27, 0.025) 1px, transparent 1px),
@@ -168,7 +169,7 @@ button {
 .section-index {
   margin: 0 0 7px;
   color: var(--acid);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -230,7 +231,7 @@ h3 {
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
@@ -257,7 +258,7 @@ h3 {
   border-radius: 999px;
   padding: 6px 9px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -265,7 +266,7 @@ h3 {
 
 .runtime-status {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -323,7 +324,7 @@ label {
 
 label > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -344,7 +345,7 @@ input {
   min-height: 48px;
   padding: 0 15px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 textarea {
@@ -371,7 +372,7 @@ textarea:focus {
   max-width: 430px;
   margin-bottom: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -428,7 +429,7 @@ textarea:focus {
   position: relative;
   color: var(--muted);
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .workflow-list li::before {
@@ -455,7 +456,7 @@ textarea:focus {
 
 .step-number,
 .step-state {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .step-state {
@@ -469,7 +470,7 @@ textarea:focus {
   border-left: 2px solid var(--copper);
   background: #fff7f0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -499,7 +500,7 @@ textarea:focus {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .run-table {
@@ -531,7 +532,7 @@ textarea:focus {
 .run-id,
 .run-time {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .run-title {
@@ -541,12 +542,12 @@ textarea:focus {
 
 .run-title strong {
   font-family: "Syne Variable", sans-serif;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .run-title small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .run-status {
@@ -555,7 +556,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .run-status.running {

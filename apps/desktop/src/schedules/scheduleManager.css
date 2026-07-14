@@ -14,7 +14,7 @@
   max-width: 680px;
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -42,13 +42,13 @@
 .schedule-summary span,
 .schedule-main dt {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
 .schedule-summary strong {
   font-family: "Syne Variable", sans-serif;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .schedule-layout {
@@ -90,7 +90,7 @@
 .panel-title-row p {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -128,7 +128,7 @@
   background: #ffffff;
   color: var(--ink);
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .schedule-field input:focus,
@@ -150,13 +150,13 @@
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .schedule-form-error {
   margin: -8px 0 0;
   color: var(--danger);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .primary-action {
@@ -192,12 +192,12 @@
 .schedule-empty strong {
   color: var(--ink);
   font-family: "Syne Variable", sans-serif;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .schedule-empty span {
   max-width: 320px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -248,12 +248,12 @@
 
 .schedule-main > div:first-child strong {
   font-family: "Syne Variable", sans-serif;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .schedule-main > div:first-child span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .schedule-main dl {
@@ -273,7 +273,7 @@
   overflow: hidden;
   margin: 0;
   color: var(--ink);
-  font-size: 9px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
