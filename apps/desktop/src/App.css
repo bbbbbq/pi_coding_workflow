@@ -32,6 +32,18 @@ body {
   background-size: 32px 32px;
 }
 
+html[lang="zh-CN"] body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+html[lang="zh-CN"] h1,
+html[lang="zh-CN"] h2,
+html[lang="zh-CN"] h3,
+html[lang="zh-CN"] .run-title strong {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  letter-spacing: -0.03em;
+}
+
 button,
 input,
 textarea {
@@ -181,6 +193,39 @@ h3 {
   display: flex;
   align-items: flex-end;
   gap: 22px;
+}
+
+.language-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #10130f;
+}
+
+.language-switch button {
+  min-width: 38px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.language-switch button:hover {
+  color: var(--paper);
+}
+
+.language-switch button.is-active {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .platforms {

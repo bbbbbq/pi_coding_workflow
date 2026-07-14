@@ -1,0 +1,71 @@
+export default {
+  language: {
+    label: "语言",
+  },
+  navigation: {
+    primary: "主导航",
+    workspace: "工作台",
+    runs: "任务记录",
+    policies: "执行策略",
+    settings: "设置",
+  },
+  header: {
+    eyebrow: "本地编码任务中心",
+    supportedPlatforms: "支持的平台",
+    ready: "原型已就绪",
+  },
+  composer: {
+    index: "01 / 新建任务",
+    title: "将需求转化为经过验证的代码变更。",
+    executor: "PI 执行器",
+    repository: "仓库工作区",
+    task: "编码任务",
+    taskPlaceholder: "描述要实现的变更、约束条件，以及 Pi 需要通过的验证命令。",
+    policyLabel: "执行策略：",
+    policy: "方案审批 · 隔离工作树 · 验证门禁",
+    start: "启动工作流",
+  },
+  workflow: {
+    index: "02 / 实时流程",
+    noRun: "暂无任务",
+    boundary: "Temporal 边界",
+    boundaryDescription: "Pi 负责内部代码编辑循环，工作流负责重试、审批与交付。",
+    steps: {
+      prepare: "准备工作区",
+      analyze: "分析代码仓库",
+      approve: "审批实施方案",
+      implement: "使用 Pi 编码",
+      validate: "验证代码变更",
+      deliver: "审核并交付",
+    },
+    states: {
+      done: "已完成",
+      working: "执行中",
+      queued: "等待中",
+    },
+  },
+  runs: {
+    index: "03 / 最近任务",
+    title: "执行记录",
+    viewAll: "查看全部",
+    ariaLabel: "最近的编码任务",
+    untitled: "未命名编码任务",
+    mock: {
+      scheduler: "修复不稳定的调度器测试",
+      importCommand: "新增工作区导入命令",
+      configParser: "迁移配置解析器",
+    },
+    time: {
+      now: "刚刚",
+      twoMinutes: "2 分钟前",
+      eighteenMinutes: "18 分钟前",
+      oneHour: "1 小时前",
+    },
+  },
+  status: {
+    running: "运行中",
+    review: "待审核",
+    complete: "已完成",
+    idle: "空闲",
+  },
+} as const;
