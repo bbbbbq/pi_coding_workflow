@@ -48,6 +48,7 @@ export async function codingWorkflow(
   let workspace: Awaited<ReturnType<typeof prepareWorkspace>> | undefined;
   let approval: ApprovalDecision | undefined;
   let latestSessionId: string | undefined;
+  const modelRouteDecisions = [] as NonNullable<CodingWorkflowResult["modelRouteDecisions"]>;
 
   setHandler(approvePlanSignal, (decision) => {
     approval = decision;
@@ -69,6 +70,7 @@ export async function codingWorkflow(
     state = { ...state, phase: "planning" };
     const plan = await analyzeWithPi(workspace, input);
     latestSessionId = plan.piSessionId;
+    if (plan.modelRouteDecision) modelRouteDecisions.push(plan.modelRouteDecision);
 
     if (input.requirePlanApproval !== false) {
       state = { ...state, phase: "waiting_for_approval" };
@@ -79,6 +81,7 @@ export async function codingWorkflow(
           status: "rejected",
           attempts: 0,
           piSessionId: latestSessionId,
+          modelRouteDecisions,
         };
       }
     }
@@ -89,6 +92,7 @@ export async function codingWorkflow(
       state = { ...state, phase: "implementing", attempt };
       const codingResult = await implementWithPi(workspace, input, attempt);
       latestSessionId = codingResult.piSessionId;
+      if (codingResult.modelRouteDecision) modelRouteDecisions.push(codingResult.modelRouteDecision);
       state = { ...state, phase: "validating", attempt };
       const validation = await validateWorkspace(workspace);
 
@@ -100,6 +104,7 @@ export async function codingWorkflow(
           attempts: attempt,
           piSessionId: latestSessionId,
           validation,
+          modelRouteDecisions,
         };
       }
     }
@@ -110,6 +115,7 @@ export async function codingWorkflow(
       status: "failed",
       attempts: maxAttempts,
       piSessionId: latestSessionId,
+      modelRouteDecisions,
     };
   } finally {
     if (workspace) {

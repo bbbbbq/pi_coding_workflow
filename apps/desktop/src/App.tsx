@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
+  ModelProvider,
+  ModelRoute,
   WorkflowDefinition,
   WorkflowRunRecord,
 } from "@pi-workflow/contracts";
 import {
   CalendarClock,
   History,
+  Network,
   Settings,
   Workflow as WorkflowIcon,
 } from "lucide-react";
@@ -21,6 +24,8 @@ import {
   getLatestWorkflowDefinition,
   getSetting,
   initializePersistence,
+  listModelProviders,
+  listModelRoutes,
   listRuns,
   saveRun,
   saveSetting,
@@ -32,15 +37,18 @@ import {
 } from "./temporal/client";
 import { createExampleWorkflow } from "./workflow/exampleWorkflow";
 import { WorkflowEditor } from "./workflow/WorkflowEditor";
+import { ModelRoutingManager } from "./models/ModelRoutingManager";
 import "./App.css";
 
-type AppView = "builder" | "schedules" | "runs";
+type AppView = "builder" | "models" | "schedules" | "runs";
 
 function App() {
   const { t, i18n } = useTranslation();
   const [activeView, setActiveView] = useState<AppView>("builder");
   const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowDefinition>(createExampleWorkflow);
   const [persistedRuns, setPersistedRuns] = useState<WorkflowRunRecord[]>([]);
+  const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
+  const [modelRoutes, setModelRoutes] = useState<ModelRoute[]>([]);
   const [temporalAvailable, setTemporalAvailable] = useState<boolean | undefined>();
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
@@ -63,9 +71,13 @@ function App() {
       const savedWorkflow = await getLatestWorkflowDefinition();
       const workflow = savedWorkflow ?? await saveWorkflowDefinition(createExampleWorkflow());
       const runs = await listRuns();
+      const providers = await listModelProviders();
+      const routes = await listModelRoutes();
       if (!cancelled) {
         setCurrentWorkflow(workflow);
         setPersistedRuns(runs);
+        setModelProviders(providers);
+        setModelRoutes(routes);
       }
     })().catch((error) => console.error("Failed to initialize persistence", error));
     return () => {
@@ -113,6 +125,7 @@ function App() {
       startedAt: now,
       updatedAt: now,
     };
+    const agentNode = currentWorkflow.nodes.find((node) => node.type === "pi-agent");
     setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
     void saveRun(run).catch((error) => console.error("Failed to save manual run", error));
     void startTemporalRun({
@@ -122,6 +135,10 @@ function App() {
       repositoryPath: input.repository,
       task: input.task,
       requirePlanApproval: false,
+      modelRouting: { providers: modelProviders, routes: modelRoutes },
+      routeId: agentNode?.type === "pi-agent" ? agentNode.config.routeId : undefined,
+      providerId: agentNode?.type === "pi-agent" ? agentNode.config.providerId : undefined,
+      modelId: agentNode?.type === "pi-agent" ? agentNode.config.modelId : undefined,
     }).then((remote) => {
       run = {
         ...run,
@@ -144,10 +161,15 @@ function App() {
       return saveRun(run);
     }).catch((error) => console.error("Failed to persist Temporal run status", error));
     return run;
-  }, [currentWorkflow, t]);
+  }, [currentWorkflow, modelProviders, modelRoutes, t]);
 
-  const { schedules, createSchedule, toggleSchedule, deleteSchedule } =
-    useWorkflowSchedules();
+  const scheduleAgentNode = currentWorkflow.nodes.find((node) => node.type === "pi-agent");
+  const { schedules, createSchedule, toggleSchedule, deleteSchedule } = useWorkflowSchedules({
+    modelRouting: { providers: modelProviders, routes: modelRoutes },
+    routeId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.routeId : undefined,
+    providerId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.providerId : undefined,
+    modelId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.modelId : undefined,
+  });
 
   return (
     <div className="app-shell">
@@ -163,6 +185,15 @@ function App() {
             type="button"
           >
             <WorkflowIcon size={18} />
+          </button>
+          <button
+            className={`rail-button ${activeView === "models" ? "is-active" : ""}`}
+            aria-label={t("navigation.models")}
+            onClick={() => setActiveView("models")}
+            title={t("navigation.models")}
+            type="button"
+          >
+            <Network size={18} />
           </button>
           <button
             className={`rail-button ${activeView === "schedules" ? "is-active" : ""}`}
@@ -227,7 +258,17 @@ function App() {
           <WorkflowEditor
             initialDefinition={currentWorkflow}
             key={`${currentWorkflow.id}:${currentWorkflow.version}:${currentWorkflow.updatedAt}`}
+            modelProviders={modelProviders}
+            modelRoutes={modelRoutes}
             onWorkflowSave={persistWorkflow}
+          />
+        )}
+        {activeView === "models" && (
+          <ModelRoutingManager
+            onProvidersChange={setModelProviders}
+            onRoutesChange={setModelRoutes}
+            providers={modelProviders}
+            routes={modelRoutes}
           />
         )}
         {activeView === "schedules" && (

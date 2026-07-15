@@ -1,4 +1,4 @@
-import type { ApprovalDecision, CodingWorkflowInput } from "./index.js";
+import type { ApprovalDecision, CodingWorkflowInput, ModelRoutingConfig } from "./index.js";
 import type { WorkflowSchedule } from "./schedule.js";
 
 export interface TemporalHealth {
@@ -15,6 +15,10 @@ export interface StartTemporalRunRequest {
   task: string;
   maxAttempts?: number;
   requirePlanApproval?: boolean;
+  modelRouting?: ModelRoutingConfig;
+  routeId?: string;
+  providerId?: string;
+  modelId?: string;
 }
 
 export interface TemporalRunRef {
@@ -26,6 +30,10 @@ export interface RegisterTemporalScheduleRequest {
   schedule: WorkflowSchedule;
   maxAttempts?: CodingWorkflowInput["maxAttempts"];
   requirePlanApproval?: CodingWorkflowInput["requirePlanApproval"];
+  modelRouting?: CodingWorkflowInput["modelRouting"];
+  routeId?: CodingWorkflowInput["routeId"];
+  providerId?: CodingWorkflowInput["providerId"];
+  modelId?: CodingWorkflowInput["modelId"];
 }
 
 export interface TemporalScheduleRef {

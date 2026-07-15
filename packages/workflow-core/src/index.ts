@@ -46,6 +46,7 @@ export function defaultNodeConfig<Type extends WorkflowNodeType>(
       maxTurns: 20,
       timeoutSeconds: 1800,
       sessionStrategy: "new",
+      routeId: "coding-default",
     },
     action: {
       handler: "shell",

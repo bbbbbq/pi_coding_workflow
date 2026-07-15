@@ -26,6 +26,9 @@ export interface PiAgentNodeConfig {
   maxTurns: number;
   timeoutSeconds: number;
   sessionStrategy: "new" | "continue";
+  routeId?: string;
+  providerId?: string;
+  modelId?: string;
 }
 
 export interface ActionNodeConfig {

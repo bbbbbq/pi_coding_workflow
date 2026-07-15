@@ -1,10 +1,12 @@
 import type { ChangeEvent, ReactNode } from "react";
-import type { WorkflowNode } from "@pi-workflow/contracts";
+import type { ModelProvider, ModelRoute, WorkflowNode } from "@pi-workflow/contracts";
 import { useTranslation } from "react-i18next";
 import { workflowNodeVisuals } from "./catalog";
 
 interface NodeInspectorProps {
   node?: WorkflowNode;
+  modelProviders: ModelProvider[];
+  modelRoutes: ModelRoute[];
   onChange: (node: WorkflowNode) => void;
   onDelete: () => void;
 }
@@ -23,7 +25,7 @@ function Field({ label, children }: FieldProps) {
   );
 }
 
-export function NodeInspector({ node, onChange, onDelete }: NodeInspectorProps) {
+export function NodeInspector({ node, modelProviders, modelRoutes, onChange, onDelete }: NodeInspectorProps) {
   const { t } = useTranslation();
 
   if (!node) {
@@ -66,7 +68,7 @@ export function NodeInspector({ node, onChange, onDelete }: NodeInspectorProps) 
           <span>{t("builder.inspector.configuration")}</span>
         </div>
 
-        {renderNodeConfiguration(node, onChange, t)}
+        {renderNodeConfiguration(node, modelProviders, modelRoutes, onChange, t)}
       </div>
 
       <button className="delete-node-button" onClick={onDelete} type="button">
@@ -78,6 +80,8 @@ export function NodeInspector({ node, onChange, onDelete }: NodeInspectorProps) 
 
 function renderNodeConfiguration(
   node: WorkflowNode,
+  modelProviders: ModelProvider[],
+  modelRoutes: ModelRoute[],
   onChange: (node: WorkflowNode) => void,
   t: (key: string) => string,
 ) {
@@ -114,6 +118,35 @@ function renderNodeConfiguration(
     case "pi-agent":
       return (
         <>
+          <Field label={t("builder.fields.modelRoute")}>
+            <select
+              value={node.config.routeId ?? ""}
+              onChange={(event) => onChange({ ...node, config: { ...node.config, routeId: event.target.value || undefined } })}
+            >
+              <option value="">{t("builder.options.directModel")}</option>
+              {modelRoutes.map((route) => <option key={route.id} value={route.id}>{route.name || route.id}</option>)}
+            </select>
+          </Field>
+          <Field label={t("builder.fields.directProvider")}>
+            <select
+              value={node.config.providerId ?? ""}
+              onChange={(event) => onChange({ ...node, config: { ...node.config, providerId: event.target.value || undefined, modelId: undefined } })}
+            >
+              <option value="">{t("builder.options.useRoute")}</option>
+              {modelProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.name || provider.id}</option>)}
+            </select>
+          </Field>
+          {node.config.providerId && (
+            <Field label={t("builder.fields.directModel")}>
+              <select
+                value={node.config.modelId ?? ""}
+                onChange={(event) => onChange({ ...node, config: { ...node.config, modelId: event.target.value || undefined } })}
+              >
+                <option value="">{t("builder.options.selectModel")}</option>
+                {modelProviders.find((provider) => provider.id === node.config.providerId)?.models.map((model) => <option disabled={!model.enabled} key={model.id} value={model.modelId}>{model.displayName || model.modelId}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label={t("builder.fields.agentMode")}>
             <select
               value={node.config.mode}

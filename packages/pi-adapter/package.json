@@ -8,12 +8,16 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
+    "@pi-workflow/contracts": "workspace:*",
+    "@earendil-works/pi-ai": "^0.80.7",
     "@earendil-works/pi-coding-agent": "^0.80.7"
   },
   "devDependencies": {
+    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
 }

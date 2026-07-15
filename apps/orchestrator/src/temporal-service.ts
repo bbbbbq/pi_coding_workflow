@@ -54,6 +54,10 @@ export class TemporalService {
       task: request.task,
       maxAttempts: request.maxAttempts,
       requirePlanApproval: request.requirePlanApproval,
+      modelRouting: request.modelRouting,
+      routeId: request.routeId,
+      providerId: request.providerId,
+      modelId: request.modelId,
     };
     try {
       const handle = await this.client.workflow.start("codingWorkflow", {
@@ -169,6 +173,10 @@ function scheduleOptions(
     task: schedule.task,
     maxAttempts: request.maxAttempts,
     requirePlanApproval: request.requirePlanApproval ?? false,
+    modelRouting: request.modelRouting,
+    routeId: request.routeId,
+    providerId: request.providerId,
+    modelId: request.modelId,
   };
 
   return {

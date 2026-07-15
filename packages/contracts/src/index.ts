@@ -1,3 +1,5 @@
+import type { ModelRouteDecision, ModelRoutingConfig } from "./model-routing.js";
+
 export type CodingRunPhase =
   | "preparing"
   | "planning"
@@ -14,6 +16,10 @@ export interface CodingWorkflowInput {
   task: string;
   maxAttempts?: number;
   requirePlanApproval?: boolean;
+  modelRouting?: ModelRoutingConfig;
+  routeId?: string;
+  providerId?: string;
+  modelId?: string;
 }
 
 export interface WorkspaceRef {
@@ -24,6 +30,7 @@ export interface WorkspaceRef {
 export interface CodingPlan {
   summary: string;
   piSessionId: string;
+  modelRouteDecision?: ModelRouteDecision;
 }
 
 export interface ApprovalDecision {
@@ -36,6 +43,7 @@ export interface CodingAttemptResult {
   piSessionId: string;
   messageCount: number;
   attempt: number;
+  modelRouteDecision?: ModelRouteDecision;
 }
 
 export interface ValidationResult {
@@ -53,9 +61,11 @@ export interface CodingWorkflowResult {
   attempts: number;
   piSessionId?: string;
   validation?: ValidationResult;
+  modelRouteDecisions?: ModelRouteDecision[];
 }
 
 export * from "./workflow.js";
 export * from "./schedule.js";
 export * from "./persistence.js";
 export * from "./temporal.js";
+export * from "./model-routing.js";

@@ -1,5 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import type {
+  ModelProvider,
+  ModelRoute,
   WorkflowApproval,
   WorkflowDefinition,
   WorkflowRunRecord,
@@ -21,6 +23,30 @@ interface DefinitionRow {
 
 interface SettingRow {
   value: string;
+}
+
+interface ModelProviderRow {
+  id: string;
+  name: string;
+  provider_type: ModelProvider["type"];
+  base_url: string;
+  secret_ref: string;
+  custom_headers_json: string;
+  timeout_ms: number;
+  enabled: number;
+  models_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ModelRouteRow {
+  id: string;
+  name: string;
+  strategy: ModelRoute["strategy"];
+  enabled: number;
+  candidates_json: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface ScheduleRow {
@@ -94,6 +120,118 @@ export async function saveSetting(key: string, value: string): Promise<void> {
       value = excluded.value,
       updated_at = excluded.updated_at
   `, [key, value, new Date().toISOString()]);
+}
+
+export async function listModelProviders(): Promise<ModelProvider[]> {
+  const database = await readyDatabase();
+  const rows = await database.select<ModelProviderRow[]>(
+    "SELECT * FROM model_providers ORDER BY updated_at DESC",
+  );
+  return rows.flatMap((row) => {
+    const models = parseJson(row.models_json);
+    const customHeaders = parseJson(row.custom_headers_json);
+    return Array.isArray(models) && customHeaders && typeof customHeaders === "object"
+      ? [{
+          id: row.id,
+          name: row.name,
+          type: row.provider_type,
+          baseUrl: row.base_url,
+          secretRef: row.secret_ref,
+          customHeaders: customHeaders as Record<string, string>,
+          timeoutMs: row.timeout_ms,
+          enabled: row.enabled === 1,
+          models: models as ModelProvider["models"],
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }]
+      : [];
+  });
+}
+
+export async function saveModelProvider(provider: ModelProvider): Promise<void> {
+  const database = await readyDatabase();
+  await database.execute(`
+    INSERT INTO model_providers (
+      id, name, provider_type, base_url, secret_ref, custom_headers_json,
+      timeout_ms, enabled, models_json, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      provider_type = excluded.provider_type,
+      base_url = excluded.base_url,
+      secret_ref = excluded.secret_ref,
+      custom_headers_json = excluded.custom_headers_json,
+      timeout_ms = excluded.timeout_ms,
+      enabled = excluded.enabled,
+      models_json = excluded.models_json,
+      updated_at = excluded.updated_at
+  `, [
+    provider.id,
+    provider.name,
+    provider.type,
+    provider.baseUrl,
+    provider.secretRef,
+    JSON.stringify(provider.customHeaders),
+    provider.timeoutMs,
+    provider.enabled ? 1 : 0,
+    JSON.stringify(provider.models),
+    provider.createdAt,
+    provider.updatedAt,
+  ]);
+}
+
+export async function deleteModelProvider(providerId: string): Promise<void> {
+  const database = await readyDatabase();
+  await database.execute("DELETE FROM model_providers WHERE id = $1", [providerId]);
+}
+
+export async function listModelRoutes(): Promise<ModelRoute[]> {
+  const database = await readyDatabase();
+  const rows = await database.select<ModelRouteRow[]>(
+    "SELECT * FROM model_routes ORDER BY updated_at DESC",
+  );
+  return rows.flatMap((row) => {
+    const candidates = parseJson(row.candidates_json);
+    return Array.isArray(candidates)
+      ? [{
+          id: row.id,
+          name: row.name,
+          strategy: row.strategy,
+          enabled: row.enabled === 1,
+          candidates: candidates as ModelRoute["candidates"],
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }]
+      : [];
+  });
+}
+
+export async function saveModelRoute(route: ModelRoute): Promise<void> {
+  const database = await readyDatabase();
+  await database.execute(`
+    INSERT INTO model_routes (
+      id, name, strategy, enabled, candidates_json, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      strategy = excluded.strategy,
+      enabled = excluded.enabled,
+      candidates_json = excluded.candidates_json,
+      updated_at = excluded.updated_at
+  `, [
+    route.id,
+    route.name,
+    route.strategy,
+    route.enabled ? 1 : 0,
+    JSON.stringify(route.candidates),
+    route.createdAt,
+    route.updatedAt,
+  ]);
+}
+
+export async function deleteModelRoute(routeId: string): Promise<void> {
+  const database = await readyDatabase();
+  await database.execute("DELETE FROM model_routes WHERE id = $1", [routeId]);
 }
 
 export async function getLatestWorkflowDefinition(): Promise<WorkflowDefinition | undefined> {

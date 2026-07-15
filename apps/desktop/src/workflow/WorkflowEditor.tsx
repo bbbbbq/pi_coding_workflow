@@ -13,6 +13,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type {
+  ModelProvider,
+  ModelRoute,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
@@ -44,10 +46,12 @@ type WorkflowCanvasEdge = Edge<WorkflowCanvasEdgeData>;
 
 interface WorkflowEditorProps {
   initialDefinition: WorkflowDefinition;
+  modelProviders: ModelProvider[];
+  modelRoutes: ModelRoute[];
   onWorkflowSave: (definition: WorkflowDefinition) => Promise<WorkflowDefinition>;
 }
 
-export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEditorProps) {
+export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes, onWorkflowSave }: WorkflowEditorProps) {
   const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>(
     initialDefinition.nodes.map(toCanvasNode),
@@ -308,6 +312,8 @@ export function WorkflowEditor({ initialDefinition, onWorkflowSave }: WorkflowEd
 
         <div className="builder-inspector-column">
           <NodeInspector
+            modelProviders={modelProviders}
+            modelRoutes={modelRoutes}
             node={selectedNode}
             onChange={updateNode}
             onDelete={deleteSelectedNode}

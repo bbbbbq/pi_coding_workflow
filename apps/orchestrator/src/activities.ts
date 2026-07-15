@@ -36,6 +36,10 @@ export async function analyzeWithPi(
     cwd: workspace.path,
     mode: "analyze",
     persistSession: true,
+    modelRouting: input.modelRouting,
+    routeId: input.routeId,
+    providerId: input.providerId,
+    modelId: input.modelId,
     prompt: [
       "Analyze the requested coding task without modifying files.",
       "Return a concise implementation plan, risks, and validation strategy.",
@@ -46,6 +50,7 @@ export async function analyzeWithPi(
   return {
     summary: "Pi analysis session completed. The transcript is the initial plan artifact.",
     piSessionId: result.sessionId,
+    modelRouteDecision: result.routeDecision,
   };
 }
 
@@ -58,6 +63,10 @@ export async function implementWithPi(
     cwd: workspace.path,
     mode: "implement",
     persistSession: true,
+    modelRouting: input.modelRouting,
+    routeId: input.routeId,
+    providerId: input.providerId,
+    modelId: input.modelId,
     prompt: [
       `Implement the coding task. This is attempt ${attempt}.`,
       "Keep the change focused. Inspect the repository before editing.",
@@ -71,6 +80,7 @@ export async function implementWithPi(
     piSessionId: result.sessionId,
     messageCount: result.messageCount,
     attempt,
+    modelRouteDecision: result.routeDecision,
   };
 }
 

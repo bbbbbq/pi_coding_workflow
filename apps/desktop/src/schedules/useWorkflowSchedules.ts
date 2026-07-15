@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  ModelRoutingConfig,
   WorkflowSchedule,
   WorkflowScheduleFrequency,
 } from "@pi-workflow/contracts";
@@ -28,7 +29,12 @@ export interface CreateWorkflowScheduleInput {
   timeZone: string;
 }
 
-export function useWorkflowSchedules() {
+export function useWorkflowSchedules(routing?: {
+  modelRouting: ModelRoutingConfig;
+  routeId?: string;
+  providerId?: string;
+  modelId?: string;
+}) {
   const [schedules, setSchedules] = useState<WorkflowSchedule[]>([]);
   const schedulesRef = useRef(schedules);
 
@@ -104,7 +110,13 @@ export function useWorkflowSchedules() {
       updatedAt: now.toISOString(),
     };
     try {
-      const remote = await registerTemporalSchedule({ schedule });
+      const remote = await registerTemporalSchedule({
+        schedule,
+        modelRouting: routing?.modelRouting,
+        routeId: routing?.routeId,
+        providerId: routing?.providerId,
+        modelId: routing?.modelId,
+      });
       schedule = {
         ...schedule,
         temporalScheduleId: remote.scheduleId,
@@ -119,7 +131,7 @@ export function useWorkflowSchedules() {
     replaceSchedules([schedule, ...schedulesRef.current]);
     await saveSchedule(schedule).catch(reportScheduleStorageError);
     return true;
-  }, [replaceSchedules]);
+  }, [replaceSchedules, routing]);
 
   const toggleSchedule = useCallback(async (scheduleId: string): Promise<void> => {
     const current = schedulesRef.current.find((schedule) => schedule.id === scheduleId);
