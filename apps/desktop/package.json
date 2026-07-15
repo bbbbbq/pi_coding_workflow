@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "runtime:build": "pnpm --filter @pi-workflow/local-runtime build",
+    "dev": "pnpm runtime:build && vite",
+    "build": "pnpm runtime:build && tsc && vite build",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri"
   },

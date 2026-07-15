@@ -14,13 +14,13 @@ export default {
   header: {
     eyebrow: "本地编码任务中心",
     supportedPlatforms: "支持的平台",
-    ready: "Temporal 编排在线",
-    unavailable: "Temporal 编排离线",
+    ready: "本地运行时已就绪",
+    unavailable: "本地运行时不可用",
   },
   schedules: {
     index: "02 / 定时任务",
     title: "让工作流按时运行。",
-    subtitle: "注册一个由 Temporal 持久管理的定时任务，即使关闭桌面应用也会继续执行。",
+    subtitle: "创建本地定时任务，在 Pi Workflow 运行时执行并支持恢复。",
     summary: {
       label: "定时任务概览",
       active: "启用中",
@@ -39,9 +39,9 @@ export default {
       taskPlaceholder: "描述希望 Pi 实现的代码变更。",
       frequency: "执行频率",
       runAt: "首次执行时间",
-      futureError: "请选择未来时间，并填写仓库路径和编码任务；桌面端还需要 Temporal 在线。",
+      futureError: "请选择未来时间，并填写仓库路径和编码任务。",
       create: "创建定时任务",
-      creating: "正在注册 Temporal 任务",
+      creating: "正在保存本地任务",
     },
     frequency: {
       once: "仅一次",
@@ -50,7 +50,7 @@ export default {
     },
     list: {
       title: "已计划的工作流",
-      description: "暂停、恢复或删除由 Temporal 管理的定时任务。",
+      description: "暂停、恢复或删除保存在本机的定时任务。",
       emptyTitle: "还没有定时任务",
       emptyDescription: "创建任务后，保存的工作流会在指定时间自动启动。",
       frequency: "频率",
@@ -65,7 +65,7 @@ export default {
       resume: "恢复定时任务",
       delete: "删除定时任务",
     },
-    runtimeBoundary: "Temporal 负责时钟、重试、补偿和暂停/恢复。关闭应用后请保持 Orchestrator 与 Temporal Server 运行。",
+    runtimeBoundary: "定时任务由本地运行时在应用打开期间执行，并保留状态供下次启动恢复。",
   },
   builder: {
     index: "01 / 工作流设计器",
@@ -249,7 +249,7 @@ export default {
   workflow: {
     index: "02 / 实时流程",
     noRun: "暂无任务",
-    boundary: "Temporal 边界",
+    boundary: "本地运行时",
     boundaryDescription: "Pi 负责内部代码编辑循环，工作流负责重试、审批与交付。",
     steps: {
       prepare: "准备工作区",

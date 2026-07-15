@@ -14,13 +14,13 @@ export default {
   header: {
     eyebrow: "LOCAL CODING OPERATIONS",
     supportedPlatforms: "Supported platforms",
-    ready: "Temporal orchestration online",
-    unavailable: "Temporal orchestration offline",
+    ready: "Local runtime ready",
+    unavailable: "Local runtime unavailable",
   },
   schedules: {
     index: "02 / SCHEDULES",
     title: "Run workflows on time.",
-    subtitle: "Register a durable Temporal Schedule that keeps running when this desktop app is closed.",
+    subtitle: "Create local schedules that resume when Pi Workflow is running.",
     summary: {
       label: "Schedule summary",
       active: "Active",
@@ -39,9 +39,9 @@ export default {
       taskPlaceholder: "Describe the change Pi should implement.",
       frequency: "Frequency",
       runAt: "First run",
-      futureError: "Choose a future time and provide a repository path and task. Temporal must be online in the desktop app.",
+      futureError: "Choose a future time and provide a repository path and task.",
       create: "Create schedule",
-      creating: "Registering with Temporal",
+      creating: "Saving local schedule",
     },
     frequency: {
       once: "Once",
@@ -50,7 +50,7 @@ export default {
     },
     list: {
       title: "Scheduled workflows",
-      description: "Pause, resume, or remove schedules stored by Temporal.",
+      description: "Pause, resume, or remove schedules stored on this device.",
       emptyTitle: "No schedules yet",
       emptyDescription: "Create a durable schedule to start the saved workflow automatically at the selected time.",
       frequency: "Frequency",
@@ -65,7 +65,7 @@ export default {
       resume: "Resume schedule",
       delete: "Delete schedule",
     },
-    runtimeBoundary: "Temporal owns the clock, retries, catch-up, and pause/resume state. Keep the Orchestrator and Temporal Server running after closing this app.",
+    runtimeBoundary: "Schedules run through the local runtime while Pi Workflow is open and remain stored for the next launch.",
   },
   builder: {
     index: "01 / WORKFLOW BUILDER",
@@ -250,7 +250,7 @@ export default {
   workflow: {
     index: "02 / LIVE GRAPH",
     noRun: "NO RUN",
-    boundary: "Temporal boundary",
+    boundary: "Local runtime",
     boundaryDescription:
       "Pi owns the inner edit loop. The workflow owns retries, approvals, and delivery.",
     steps: {

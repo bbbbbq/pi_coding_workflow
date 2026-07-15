@@ -1,4 +1,5 @@
 export const localRuntimeMethods = [
+  "runtime.health",
   "workflow.list",
   "workflow.get",
   "workflow.create",

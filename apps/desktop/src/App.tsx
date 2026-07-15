@@ -1,7 +1,8 @@
 import {
-  OrchestratorClientError,
-  type OrchestratorApplicationService,
-} from "@pi-workflow/application-service/orchestrator-client";
+  DesktopRuntimeError,
+  type DesktopRuntimeClient,
+  desktopRuntime,
+} from "./runtime/client";
 import { useCallback, useEffect, useState } from "react";
 import type {
   ModelProvider,
@@ -30,15 +31,8 @@ import {
   initializePersistence,
   listModelProviders,
   listModelRoutes,
-  listRuns,
-  saveRun,
   saveSetting,
 } from "./storage/repository";
-import {
-  getTemporalHealth,
-  orchestratorApplication,
-  startTemporalRun,
-} from "./temporal/client";
 import { createExampleWorkflow } from "./workflow/exampleWorkflow";
 import { WorkflowEditor } from "./workflow/WorkflowEditor";
 import { ModelRoutingManager } from "./models/ModelRoutingManager";
@@ -53,8 +47,8 @@ function App() {
   const [persistedRuns, setPersistedRuns] = useState<WorkflowRunRecord[]>([]);
   const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
   const [modelRoutes, setModelRoutes] = useState<ModelRoute[]>([]);
-  const [temporalAvailable, setTemporalAvailable] = useState<boolean | undefined>();
-  const workflowApplication = orchestratorApplication;
+  const [runtimeAvailable, setRuntimeAvailable] = useState<boolean | undefined>();
+  const workflowApplication = desktopRuntime;
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
     : "en";
@@ -74,14 +68,17 @@ function App() {
         await i18n.changeLanguage(savedLanguage);
       }
       const legacyWorkflow = await getLatestWorkflowDefinition();
-      const runs = await listRuns();
+      const runs = await desktopRuntime.listRuns().catch((error) => {
+        console.error("Failed to load runs from local runtime", error);
+        return [];
+      });
       const providers = await listModelProviders();
       const routes = await listModelRoutes();
       let workflow = legacyWorkflow ?? createExampleWorkflow();
       try {
         workflow = await loadOrCreateWorkflow(workflowApplication, legacyWorkflow);
       } catch (error) {
-        console.error("Failed to load Workflow from Orchestrator", error);
+        console.error("Failed to load Workflow from local runtime", error);
       }
       if (!cancelled) {
         setCurrentWorkflow(workflow);
@@ -98,12 +95,12 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     const check = () => {
-      void getTemporalHealth()
+      void desktopRuntime.health()
         .then(() => {
-          if (!cancelled) setTemporalAvailable(true);
+          if (!cancelled) setRuntimeAvailable(true);
         })
         .catch(() => {
-          if (!cancelled) setTemporalAvailable(false);
+          if (!cancelled) setRuntimeAvailable(false);
         });
     };
     check();
@@ -137,30 +134,17 @@ function App() {
       startedAt: now,
       updatedAt: now,
     };
-    const agentNode = currentWorkflow.nodes.find((node) => node.type === "pi-agent");
     setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
-    void saveRun(run).catch((error) => console.error("Failed to save manual run", error));
-    void startTemporalRun({
-      runId: run.id,
+    void desktopRuntime.createRun({
+      id: run.id,
       workflowId: currentWorkflow.id,
       workflowVersion: currentWorkflow.version,
-      repositoryPath: input.repository,
+      title,
+      repository: input.repository,
       task: input.task,
-      requirePlanApproval: false,
-      modelRouting: { providers: modelProviders, routes: modelRoutes },
-      routeId: agentNode?.type === "pi-agent" ? agentNode.config.routeId : undefined,
-      providerId: agentNode?.type === "pi-agent" ? agentNode.config.providerId : undefined,
-      modelId: agentNode?.type === "pi-agent" ? agentNode.config.modelId : undefined,
-    }).then((remote) => {
-      run = {
-        ...run,
-        status: "running",
-        temporalWorkflowId: remote.workflowId,
-        temporalRunId: remote.runId,
-        updatedAt: new Date().toISOString(),
-      };
+    }).then(() => desktopRuntime.startRun(run.id)).then((started) => {
+      run = started.run;
       setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
-      return saveRun(run);
     }).catch((error: unknown) => {
       run = {
         ...run,
@@ -170,18 +154,12 @@ function App() {
         updatedAt: new Date().toISOString(),
       };
       setPersistedRuns((current) => [run, ...current.filter((item) => item.id !== run.id)].slice(0, 50));
-      return saveRun(run);
-    }).catch((error) => console.error("Failed to persist Temporal run status", error));
+      console.error("Failed to start local run", error);
+    });
     return run;
-  }, [currentWorkflow, modelProviders, modelRoutes, t]);
+  }, [currentWorkflow, t]);
 
-  const scheduleAgentNode = currentWorkflow.nodes.find((node) => node.type === "pi-agent");
-  const { schedules, createSchedule, toggleSchedule, deleteSchedule } = useWorkflowSchedules({
-    modelRouting: { providers: modelProviders, routes: modelRoutes },
-    routeId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.routeId : undefined,
-    providerId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.providerId : undefined,
-    modelId: scheduleAgentNode?.type === "pi-agent" ? scheduleAgentNode.config.modelId : undefined,
-  });
+  const { schedules, createSchedule, toggleSchedule, deleteSchedule } = useWorkflowSchedules();
 
   return (
     <div className="app-shell">
@@ -260,8 +238,8 @@ function App() {
                 aria-pressed={currentLanguage === "zh-CN"}
               >中文</button>
             </div>
-            <div className={`runtime-status ${temporalAvailable === false ? "is-offline" : ""}`}>
-              <i /> {t(temporalAvailable ? "header.ready" : "header.unavailable")}
+            <div className={`runtime-status ${runtimeAvailable === false ? "is-offline" : ""}`}>
+              <i /> {t(runtimeAvailable ? "header.ready" : "header.unavailable")}
             </div>
           </div>
         </header>
@@ -310,7 +288,7 @@ function App() {
 export default App;
 
 async function loadOrCreateWorkflow(
-  application: OrchestratorApplicationService,
+  application: DesktopRuntimeClient,
   legacyWorkflow?: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
   const savedWorkflows = await application.listWorkflows();
@@ -320,7 +298,7 @@ async function loadOrCreateWorkflow(
   try {
     return (await application.createWorkflow(legacyWorkflow ?? createExampleWorkflow())).workflow.definition;
   } catch (error) {
-    if (!(error instanceof OrchestratorClientError) || error.code !== "version_conflict") throw error;
+    if (!(error instanceof DesktopRuntimeError) || error.code !== "version_conflict") throw error;
     return (await application.getWorkflow((legacyWorkflow ?? createExampleWorkflow()).id)).definition;
   }
 }

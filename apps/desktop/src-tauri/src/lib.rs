@@ -1,10 +1,132 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    io::{BufRead, BufReader, Write},
+    path::PathBuf,
+    process::{Child, ChildStdin, ChildStdout, Command as ProcessCommand, Stdio},
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 const KEYCHAIN_SERVICE: &str = "com.caojunze.piworkflow.model-provider";
+
+#[derive(Default)]
+struct RuntimeSidecar {
+    process: Mutex<Option<RuntimeProcess>>,
+}
+
+struct RuntimeProcess {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+impl RuntimeSidecar {
+    fn request(&self, app: &AppHandle, request: &Value) -> Result<Value, String> {
+        let mut process = self
+            .process
+            .lock()
+            .map_err(|_| "Local runtime lock is poisoned.".to_string())?;
+        for attempt in 0..2 {
+            if process.is_none() {
+                *process = Some(RuntimeProcess::spawn(app)?);
+            }
+            match process.as_mut().expect("runtime process was initialized").request(request) {
+                Ok(response) => return Ok(response),
+                Err(error) if attempt == 0 => {
+                    eprintln!("Local runtime stopped responding; restarting: {error}");
+                    *process = None;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err("Local runtime request failed.".to_string())
+    }
+}
+
+impl RuntimeProcess {
+    fn spawn(app: &AppHandle) -> Result<Self, String> {
+        let executable = std::env::var("PI_WORKFLOW_RUNTIME_EXECUTABLE")
+            .unwrap_or_else(|_| "node".to_string());
+        let script = runtime_script_path(app)?;
+        let mut child = ProcessCommand::new(executable)
+            .arg(script)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| format!("Unable to start local runtime: {error}"))?;
+        let stdin = child.stdin.take().ok_or("Local runtime stdin is unavailable.")?;
+        let stdout = child.stdout.take().ok_or("Local runtime stdout is unavailable.")?;
+        if let Some(stderr) = child.stderr.take() {
+            thread::spawn(move || {
+                for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                    eprintln!("[piwf-runtime] {line}");
+                }
+            });
+        }
+        Ok(Self { child, stdin, stdout: BufReader::new(stdout) })
+    }
+
+    fn request(&mut self, request: &Value) -> Result<Value, String> {
+        serde_json::to_writer(&mut self.stdin, request)
+            .map_err(|error| format!("Unable to serialize runtime request: {error}"))?;
+        self.stdin
+            .write_all(b"\n")
+            .and_then(|_| self.stdin.flush())
+            .map_err(|error| format!("Unable to write runtime request: {error}"))?;
+        let mut response = String::new();
+        let read = self
+            .stdout
+            .read_line(&mut response)
+            .map_err(|error| format!("Unable to read runtime response: {error}"))?;
+        if read == 0 {
+            return Err("Local runtime exited before responding.".to_string());
+        }
+        serde_json::from_str(&response)
+            .map_err(|error| format!("Local runtime returned invalid JSON: {error}"))
+    }
+}
+
+impl Drop for RuntimeProcess {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn runtime_script_path(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Ok(path) = std::env::var("PI_WORKFLOW_RUNTIME_SCRIPT") {
+        return Ok(PathBuf::from(path));
+    }
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../local-runtime/dist/piwf-runtime.js");
+    if development.exists() {
+        return Ok(development);
+    }
+    app.path()
+        .resource_dir()
+        .map(|directory| directory.join("piwf-runtime.js"))
+        .map_err(|error| format!("Unable to locate local runtime resource: {error}"))
+}
+
+#[tauri::command]
+async fn runtime_request(
+    app: AppHandle,
+    state: State<'_, Arc<RuntimeSidecar>>,
+    request: Value,
+) -> Result<Value, String> {
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || state.request(&app, &request))
+        .await
+        .map_err(|error| format!("Local runtime task failed: {error}"))?
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -159,12 +281,14 @@ pub fn run() {
     }];
 
     tauri::Builder::default()
+        .manage(Arc::new(RuntimeSidecar::default()))
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:pi-workflow.db", migrations)
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            runtime_request,
             store_model_secret,
             delete_model_secret,
             has_model_secret,

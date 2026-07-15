@@ -2,9 +2,7 @@ import Database from "@tauri-apps/plugin-sql";
 import type {
   ModelProvider,
   ModelRoute,
-  WorkflowApproval,
   WorkflowDefinition,
-  WorkflowRunRecord,
   WorkflowSchedule,
 } from "@pi-workflow/contracts";
 
@@ -62,35 +60,6 @@ interface ScheduleRow {
   enabled: number;
   created_at: string;
   updated_at: string;
-}
-
-interface RunRow {
-  id: string;
-  workflow_id: string;
-  workflow_version: number;
-  schedule_id: string | null;
-  trigger_type: WorkflowRunRecord["trigger"];
-  title: string;
-  repository: string;
-  task: string | null;
-  status: WorkflowRunRecord["status"];
-  started_at: string;
-  updated_at: string;
-  completed_at: string | null;
-  result_json: string | null;
-  temporal_workflow_id: string | null;
-  temporal_run_id: string | null;
-}
-
-interface ApprovalRow {
-  id: string;
-  run_id: string;
-  node_id: string | null;
-  title: string;
-  status: WorkflowApproval["status"];
-  requested_at: string;
-  decided_at: string | null;
-  comment: string | null;
 }
 
 export function initializePersistence(): Promise<void> {
@@ -262,49 +231,6 @@ export async function deleteScheduleRecord(scheduleId: string): Promise<void> {
   await database.execute("DELETE FROM schedules WHERE id = $1", [scheduleId]);
 }
 
-export async function listRuns(limit = 50): Promise<WorkflowRunRecord[]> {
-  const database = await readyDatabase();
-  const rows = await database.select<RunRow[]>(`
-    SELECT * FROM workflow_runs ORDER BY updated_at DESC LIMIT $1
-  `, [limit]);
-  return rows.map(runFromRow);
-}
-
-export async function saveRun(run: WorkflowRunRecord): Promise<void> {
-  const database = await readyDatabase();
-  await saveSqliteRun(database, run);
-}
-
-export async function saveApproval(approval: WorkflowApproval): Promise<void> {
-  const database = await readyDatabase();
-  await database.execute(`
-    INSERT INTO approvals (
-      id, run_id, node_id, title, status, requested_at, decided_at, comment
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    ON CONFLICT(id) DO UPDATE SET
-      status = excluded.status,
-      decided_at = excluded.decided_at,
-      comment = excluded.comment
-  `, [
-    approval.id,
-    approval.runId,
-    approval.nodeId ?? null,
-    approval.title,
-    approval.status,
-    approval.requestedAt,
-    approval.decidedAt ?? null,
-    approval.comment ?? null,
-  ]);
-}
-
-export async function listApprovals(runId: string): Promise<WorkflowApproval[]> {
-  const database = await readyDatabase();
-  const rows = await database.select<ApprovalRow[]>(`
-    SELECT * FROM approvals WHERE run_id = $1 ORDER BY requested_at DESC
-  `, [runId]);
-  return rows.map(approvalFromRow);
-}
-
 async function readyDatabase(): Promise<Database> {
   await initializePersistence();
   return getDatabase();
@@ -356,39 +282,6 @@ async function saveSqliteSchedule(database: Database, schedule: WorkflowSchedule
   ]);
 }
 
-async function saveSqliteRun(database: Database, run: WorkflowRunRecord): Promise<void> {
-  await database.execute(`
-    INSERT INTO workflow_runs (
-      id, workflow_id, workflow_version, schedule_id, trigger_type, title,
-      repository, task, status, started_at, updated_at, completed_at, result_json,
-      temporal_workflow_id, temporal_run_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-    ON CONFLICT(id) DO UPDATE SET
-      status = excluded.status,
-      updated_at = excluded.updated_at,
-      completed_at = excluded.completed_at,
-      result_json = excluded.result_json,
-      temporal_workflow_id = excluded.temporal_workflow_id,
-      temporal_run_id = excluded.temporal_run_id
-  `, [
-    run.id,
-    run.workflowId,
-    run.workflowVersion,
-    run.scheduleId ?? null,
-    run.trigger,
-    run.title,
-    run.repository,
-    run.task ?? null,
-    run.status,
-    run.startedAt,
-    run.updatedAt,
-    run.completedAt ?? null,
-    run.result === undefined ? null : JSON.stringify(run.result),
-    run.temporalWorkflowId ?? null,
-    run.temporalRunId ?? null,
-  ]);
-}
-
 function scheduleFromRow(row: ScheduleRow): WorkflowSchedule {
   return {
     id: row.id,
@@ -407,39 +300,6 @@ function scheduleFromRow(row: ScheduleRow): WorkflowSchedule {
     enabled: row.enabled === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-}
-
-function runFromRow(row: RunRow): WorkflowRunRecord {
-  return {
-    id: row.id,
-    workflowId: row.workflow_id,
-    workflowVersion: row.workflow_version,
-    scheduleId: row.schedule_id ?? undefined,
-    trigger: row.trigger_type,
-    title: row.title,
-    repository: row.repository,
-    task: row.task ?? undefined,
-    status: row.status,
-    startedAt: row.started_at,
-    updatedAt: row.updated_at,
-    completedAt: row.completed_at ?? undefined,
-    result: row.result_json ? parseJson(row.result_json) : undefined,
-    temporalWorkflowId: row.temporal_workflow_id ?? undefined,
-    temporalRunId: row.temporal_run_id ?? undefined,
-  };
-}
-
-function approvalFromRow(row: ApprovalRow): WorkflowApproval {
-  return {
-    id: row.id,
-    runId: row.run_id,
-    nodeId: row.node_id ?? undefined,
-    title: row.title,
-    status: row.status,
-    requestedAt: row.requested_at,
-    decidedAt: row.decided_at ?? undefined,
-    comment: row.comment ?? undefined,
   };
 }
 

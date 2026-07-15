@@ -64,6 +64,8 @@ export class LocalRuntime implements Disposable {
     const params = request.params ?? {};
     const options = (params.options ?? {}) as ChangeOptions;
     switch (request.method) {
+      case "runtime.health":
+        return { status: "ok", transport: "stdio" };
       case "workflow.list":
         return this.workflows.listWorkflows();
       case "workflow.get":
