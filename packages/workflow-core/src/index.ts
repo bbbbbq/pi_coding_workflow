@@ -107,6 +107,7 @@ export function createWorkflowNode<Type extends WorkflowNodeType>(input: {
     id: input.id,
     type: input.type,
     name: input.name,
+    enabled: true,
     version: 1,
     position: input.position,
     config: defaultNodeConfig(input.type),

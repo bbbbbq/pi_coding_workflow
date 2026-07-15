@@ -146,6 +146,16 @@ pub fn run() {
                 ON model_routes(enabled, updated_at DESC);
         "#,
         kind: MigrationKind::Up,
+    }, Migration {
+        version: 5,
+        description: "add_workflow_lifecycle_status",
+        sql: r#"
+            ALTER TABLE workflows ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'draft';
+            ALTER TABLE workflows ADD COLUMN published_at TEXT;
+            CREATE INDEX IF NOT EXISTS idx_workflows_lifecycle
+                ON workflows(lifecycle_status, updated_at DESC);
+        "#,
+        kind: MigrationKind::Up,
     }];
 
     tauri::Builder::default()

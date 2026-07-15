@@ -79,6 +79,54 @@ export class TemporalService {
     }
   }
 
+  async listRuns(): Promise<Array<{
+    workflowId: string;
+    runId: string;
+    status: string;
+    startedAt?: string;
+    closedAt?: string;
+  }>> {
+    const runs = [];
+    for await (const execution of this.client.workflow.list()) {
+      if (execution.type !== "codingWorkflow") continue;
+      runs.push({
+        workflowId: execution.workflowId,
+        runId: execution.runId,
+        status: execution.status.name,
+        startedAt: execution.startTime?.toISOString(),
+        closedAt: execution.closeTime?.toISOString(),
+      });
+      if (runs.length >= 100) break;
+    }
+    return runs;
+  }
+
+  async describeRun(workflowId: string): Promise<{
+    workflowId: string;
+    runId: string;
+    status: string;
+    startedAt?: string;
+    closedAt?: string;
+    state?: unknown;
+  }> {
+    const handle = this.client.workflow.getHandle(workflowId);
+    const description = await handle.describe();
+    let state: unknown;
+    try {
+      state = await handle.query("runState");
+    } catch {
+      // Some closed or failed executions may no longer accept queries.
+    }
+    return {
+      workflowId: description.workflowId,
+      runId: description.runId,
+      status: description.status.name,
+      startedAt: description.startTime?.toISOString(),
+      closedAt: description.closeTime?.toISOString(),
+      state,
+    };
+  }
+
   async registerSchedule(request: RegisterTemporalScheduleRequest): Promise<TemporalScheduleRef> {
     const scheduleId = temporalScheduleId(request.schedule);
     const options = scheduleOptions(scheduleId, request, this.config.taskQueue);

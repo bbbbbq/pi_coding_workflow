@@ -19,12 +19,14 @@ import type {
   WorkflowEdge,
   WorkflowNode,
   WorkflowNodeType,
+  WorkflowValidationResult,
 } from "@pi-workflow/contracts";
 import {
   createWorkflowNode,
   validateWorkflowDefinition,
   workflowNodePorts,
 } from "@pi-workflow/workflow-core";
+import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { workflowNodeCatalog } from "./catalog";
 import { createExampleWorkflow } from "./exampleWorkflow";
@@ -44,6 +46,12 @@ type WorkflowCanvasEdgeData = {
 
 type WorkflowCanvasEdge = Edge<WorkflowCanvasEdgeData>;
 
+interface WorkflowCheckSnapshot {
+  checkedAt: string;
+  fingerprint: string;
+  result: WorkflowValidationResult;
+}
+
 interface WorkflowEditorProps {
   initialDefinition: WorkflowDefinition;
   modelProviders: ModelProvider[];
@@ -52,7 +60,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes, onWorkflowSave }: WorkflowEditorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowCanvasNode>(
     initialDefinition.nodes.map(toCanvasNode),
   );
@@ -62,14 +70,32 @@ export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes,
   const [workflowName, setWorkflowName] = useState(initialDefinition.name);
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
   const [saveState, setSaveState] = useState<"draft" | "saving" | "saved">("saved");
+  const [workflowCheck, setWorkflowCheck] = useState<WorkflowCheckSnapshot>();
 
   const definition = useMemo(
     () => toWorkflowDefinition(initialDefinition.id, workflowName, nodes, edges),
     [edges, initialDefinition.id, nodes, workflowName],
   );
-  const validation = useMemo(() => validateWorkflowDefinition(definition), [definition]);
+  const definitionFingerprint = useMemo(
+    () => JSON.stringify({ name: definition.name, nodes: definition.nodes, edges: definition.edges }),
+    [definition],
+  );
+  const checkIsCurrent = workflowCheck?.fingerprint === definitionFingerprint;
+  const checkedIssues = workflowCheck?.result.issues ?? [];
+  const errorCount = checkedIssues.filter((issue) => issue.severity === "error").length;
+  const warningCount = checkedIssues.filter((issue) => issue.severity === "warning").length;
   const selectedNode = nodes.find((node) => node.id === selectedNodeId)?.data.workflowNode;
   const triggerExists = nodes.some((node) => node.data.workflowNode.type === "trigger");
+
+  function checkWorkflow(): WorkflowValidationResult {
+    const result = validateWorkflowDefinition(definition);
+    setWorkflowCheck({
+      checkedAt: new Date().toISOString(),
+      fingerprint: definitionFingerprint,
+      result,
+    });
+    return result;
+  }
 
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) {
@@ -173,6 +199,11 @@ export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes,
   }
 
   async function saveWorkflow() {
+    const validation = checkWorkflow();
+    if (!validation.valid) {
+      setSaveState("draft");
+      return;
+    }
     setSaveState("saving");
     try {
       await onWorkflowSave(definition);
@@ -217,6 +248,15 @@ export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes,
             {t("builder.reset")}
           </button>
           <button
+            className="builder-check-button"
+            disabled={saveState === "saving"}
+            onClick={checkWorkflow}
+            type="button"
+          >
+            <ShieldCheck aria-hidden="true" size={15} />
+            {t("builder.check")}
+          </button>
+          <button
             className="builder-save-button"
             disabled={saveState === "saving"}
             onClick={() => void saveWorkflow()}
@@ -227,10 +267,30 @@ export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes,
         </div>
       </header>
 
-      <div className="builder-statusbar">
-        <span className={validation.valid ? "is-valid" : "is-invalid"}>
-          <i /> {validation.valid ? t("builder.valid") : t("builder.invalid", { count: validation.issues.length })}
+      <div className="builder-statusbar" aria-live="polite">
+        <span className={checkIsCurrent ? (errorCount === 0 ? "is-valid" : "is-invalid") : "is-stale"}>
+          <i />
+          {!workflowCheck
+            ? t("builder.notChecked")
+            : !checkIsCurrent
+              ? t("builder.checkStale")
+              : errorCount === 0
+                ? t("builder.valid")
+                : t("builder.invalid", { count: errorCount })}
         </span>
+        {workflowCheck && (
+          <>
+            <span>{t("builder.errorCount", { count: errorCount })}</span>
+            <span>{t("builder.warningCount", { count: warningCount })}</span>
+            <span>{t("builder.checkedAt", {
+              time: new Intl.DateTimeFormat(i18n.language, {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date(workflowCheck.checkedAt)),
+            })}</span>
+          </>
+        )}
         <span>{nodes.length} {t("builder.nodesCount")}</span>
         <span>{edges.length} {t("builder.connectionsCount")}</span>
         <span className="save-state">{t(`builder.${saveState}`)}</span>
@@ -324,11 +384,21 @@ export function WorkflowEditor({ initialDefinition, modelProviders, modelRoutes,
               <p className="section-index">{t("builder.validation.index")}</p>
               <h3>{t("builder.validation.title")}</h3>
             </div>
-            {validation.issues.length === 0 ? (
-              <p className="validation-empty">{t("builder.validation.empty")}</p>
+            {!workflowCheck ? (
+              <p className="validation-unchecked">{t("builder.validation.unchecked")}</p>
+            ) : checkedIssues.length === 0 ? (
+              <p className={checkIsCurrent ? "validation-empty" : "validation-stale"}>
+                {checkIsCurrent ? t("builder.validation.empty") : t("builder.validation.stale")}
+              </p>
             ) : (
               <ul>
-                {validation.issues.slice(0, 6).map((issue, index) => (
+                {!checkIsCurrent && (
+                  <li className="warning" key="stale-check">
+                    <span>!</span>
+                    {t("builder.validation.stale")}
+                  </li>
+                )}
+                {checkedIssues.slice(0, 6).map((issue, index) => (
                   <li className={issue.severity} key={`${issue.code}-${issue.nodeId ?? issue.edgeId ?? index}`}>
                     <span>{issue.severity === "error" ? "!" : "·"}</span>
                     {t(`builder.validationCodes.${issue.code}`, { defaultValue: issue.message })}

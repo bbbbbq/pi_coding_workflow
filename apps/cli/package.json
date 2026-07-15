@@ -1,0 +1,27 @@
+{
+  "name": "@pi-workflow/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "piwf": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --splitting --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --entry-names=index --chunk-names=chunks/[name]-[hash] --outdir=dist",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@pi-workflow/application-service": "workspace:*",
+    "@pi-workflow/contracts": "workspace:*",
+    "commander": "^14.0.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

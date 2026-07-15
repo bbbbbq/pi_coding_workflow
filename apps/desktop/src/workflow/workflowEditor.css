@@ -39,6 +39,7 @@
 }
 
 .builder-secondary-button,
+.builder-check-button,
 .builder-save-button {
   min-height: 39px;
   padding: 0 14px;
@@ -49,6 +50,21 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.builder-check-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-color: #9ca89c;
+  background: #f5f8f4;
+  color: #33463a;
+}
+
+.builder-check-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .builder-save-button {
@@ -103,6 +119,14 @@
 
 .builder-statusbar .is-invalid i {
   background: var(--danger);
+}
+
+.builder-statusbar .is-stale {
+  color: #8a6500;
+}
+
+.builder-statusbar .is-stale i {
+  background: #c58b00;
 }
 
 .builder-layout {
@@ -510,6 +534,20 @@
   margin: 10px 0 0;
   color: var(--acid);
   font-size: 11px;
+}
+
+.validation-unchecked {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.validation-stale {
+  margin: 10px 0 0;
+  color: #8a6500;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 @media (max-width: 1200px) {

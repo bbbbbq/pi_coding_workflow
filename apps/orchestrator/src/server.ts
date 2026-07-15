@@ -8,14 +8,16 @@ import type {
   TemporalApprovalRequest,
 } from "@pi-workflow/contracts";
 import { loadOrchestratorConfig, type OrchestratorConfig } from "./config.js";
+import { ModelRoutingService } from "./model-routing-service.js";
 import { TemporalService } from "./temporal-service.js";
 
 export async function startApiServer(
   service: TemporalService,
   config: OrchestratorConfig = loadOrchestratorConfig(),
+  modelRouting: ModelRoutingService = ModelRoutingService.load(config.modelRoutingFile),
 ): Promise<ReturnType<typeof createServer>> {
   const server = createServer((request, response) => {
-    void handleRequest(request, response, service, config);
+    void handleRequest(request, response, service, modelRouting, config);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -39,6 +41,7 @@ async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
   service: TemporalService,
+  modelRouting: ModelRoutingService,
   config: OrchestratorConfig,
 ): Promise<void> {
   if (!applyCors(request, response, config)) return;
@@ -65,6 +68,17 @@ async function handleRequest(
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/v1/runs") {
+      sendJson(response, 200, await service.listRuns());
+      return;
+    }
+
+    const runDescriptionMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)$/);
+    if (request.method === "GET" && runDescriptionMatch) {
+      sendJson(response, 200, await service.describeRun(decodeURIComponent(runDescriptionMatch[1])));
+      return;
+    }
+
     const runMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)\/(pause|resume|cancel|approval)$/);
     if (request.method === "POST" && runMatch) {
       const workflowId = decodeURIComponent(runMatch[1]);
@@ -86,6 +100,36 @@ async function handleRequest(
       const body = await readJson<RegisterTemporalScheduleRequest>(request);
       validateScheduleRequest(body);
       sendJson(response, 201, await service.registerSchedule(body));
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/providers") {
+      sendJson(response, 200, modelRouting.listProviders());
+      return;
+    }
+
+    const providerTestMatch = url.pathname.match(/^\/v1\/providers\/([^/]+)\/test$/);
+    if (request.method === "POST" && providerTestMatch) {
+      const providerId = decodeURIComponent(providerTestMatch[1]);
+      if (!modelRouting.listProviders().some((provider) => provider.id === providerId)) {
+        throw new ApiError(404, `Provider '${providerId}' was not found.`);
+      }
+      sendJson(response, 200, await modelRouting.testProvider(providerId));
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/routes") {
+      sendJson(response, 200, modelRouting.listRoutes());
+      return;
+    }
+
+    const routeResolveMatch = url.pathname.match(/^\/v1\/routes\/([^/]+)\/resolve$/);
+    if (request.method === "POST" && routeResolveMatch) {
+      const routeId = decodeURIComponent(routeResolveMatch[1]);
+      if (!modelRouting.listRoutes().some((route) => route.id === routeId)) {
+        throw new ApiError(404, `Route '${routeId}' was not found.`);
+      }
+      sendJson(response, 200, modelRouting.resolveRoute(routeId));
       return;
     }
 

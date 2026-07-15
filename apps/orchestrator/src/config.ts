@@ -5,6 +5,7 @@ export interface OrchestratorConfig {
   apiHost: string;
   apiPort: number;
   allowedOrigins: Set<string>;
+  modelRoutingFile?: string;
 }
 
 const defaultOrigins = [
@@ -21,6 +22,7 @@ export function loadOrchestratorConfig(): OrchestratorConfig {
     taskQueue: process.env.TEMPORAL_TASK_QUEUE ?? "pi-coding-workflow",
     apiHost: process.env.PI_WORKFLOW_API_HOST ?? "127.0.0.1",
     apiPort: parsePort(process.env.PI_WORKFLOW_API_PORT),
+    modelRoutingFile: process.env.PI_WORKFLOW_MODEL_ROUTING_FILE,
     allowedOrigins: new Set(
       (process.env.PI_WORKFLOW_ALLOWED_ORIGINS?.split(",") ?? defaultOrigins)
         .map((origin) => origin.trim())

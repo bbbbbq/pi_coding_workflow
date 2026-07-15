@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource-variable/syne": "^5.2.7",
     "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@pi-workflow/application-service": "workspace:*",
     "@pi-workflow/contracts": "workspace:*",
     "@pi-workflow/workflow-core": "workspace:*",
     "@tauri-apps/api": "^2",

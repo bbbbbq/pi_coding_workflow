@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  WorkflowApplicationError,
+  WorkflowApplicationService,
+} from "@pi-workflow/application-service";
 import type {
   ModelProvider,
   ModelRoute,
@@ -21,7 +25,6 @@ import type { SupportedLanguage } from "./i18n";
 import { ScheduleManager } from "./schedules/ScheduleManager";
 import { useWorkflowSchedules } from "./schedules/useWorkflowSchedules";
 import {
-  getLatestWorkflowDefinition,
   getSetting,
   initializePersistence,
   listModelProviders,
@@ -29,7 +32,7 @@ import {
   listRuns,
   saveRun,
   saveSetting,
-  saveWorkflowDefinition,
+  TauriWorkflowRepository,
 } from "./storage/repository";
 import {
   getTemporalHealth,
@@ -50,6 +53,10 @@ function App() {
   const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
   const [modelRoutes, setModelRoutes] = useState<ModelRoute[]>([]);
   const [temporalAvailable, setTemporalAvailable] = useState<boolean | undefined>();
+  const workflowApplication = useMemo(
+    () => new WorkflowApplicationService(new TauriWorkflowRepository()),
+    [],
+  );
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
     : "en";
@@ -68,8 +75,7 @@ function App() {
       if (savedLanguage === "en" || savedLanguage === "zh-CN") {
         await i18n.changeLanguage(savedLanguage);
       }
-      const savedWorkflow = await getLatestWorkflowDefinition();
-      const workflow = savedWorkflow ?? await saveWorkflowDefinition(createExampleWorkflow());
+      const workflow = await loadOrCreateWorkflow(workflowApplication);
       const runs = await listRuns();
       const providers = await listModelProviders();
       const routes = await listModelRoutes();
@@ -83,7 +89,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [i18n]);
+  }, [i18n, workflowApplication]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +111,12 @@ function App() {
   }, []);
 
   const persistWorkflow = useCallback(async (definition: WorkflowDefinition) => {
-    const saved = await saveWorkflowDefinition(definition);
+    const saved = (await workflowApplication.applyWorkflow(definition, {
+      ifVersion: currentWorkflow.version,
+    })).workflow.definition;
     setCurrentWorkflow(saved);
     return saved;
-  }, []);
+  }, [currentWorkflow.version, workflowApplication]);
 
   const startManualWorkflow = useCallback((input: StartRunInput) => {
     const now = new Date().toISOString();
@@ -296,3 +304,18 @@ function App() {
 }
 
 export default App;
+
+async function loadOrCreateWorkflow(
+  application: WorkflowApplicationService,
+): Promise<WorkflowDefinition> {
+  const savedWorkflows = await application.listWorkflows();
+  if (savedWorkflows[0]) {
+    return (await application.getWorkflow(savedWorkflows[0].id)).definition;
+  }
+  try {
+    return (await application.createWorkflow(createExampleWorkflow())).workflow.definition;
+  } catch (error) {
+    if (!(error instanceof WorkflowApplicationError) || error.code !== "version_conflict") throw error;
+    return (await application.getWorkflow(createExampleWorkflow().id)).definition;
+  }
+}

@@ -105,6 +105,8 @@ export interface WorkflowNodeBase<
   id: string;
   type: Type;
   name: string;
+  /** Missing values in definitions created before v0.2 are treated as enabled. */
+  enabled?: boolean;
   version: number;
   position: {
     x: number;

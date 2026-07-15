@@ -8,6 +8,34 @@ importers:
 
   .: {}
 
+  apps/cli:
+    dependencies:
+      '@pi-workflow/application-service':
+        specifier: workspace:*
+        version: link:../../packages/application-service
+      '@pi-workflow/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      commander:
+        specifier: ^14.0.0
+        version: 14.0.3
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+
   apps/desktop:
     dependencies:
       '@fontsource-variable/syne':
@@ -16,6 +44,9 @@ importers:
       '@fontsource/ibm-plex-mono':
         specifier: ^5.2.7
         version: 5.2.7
+      '@pi-workflow/application-service':
+        specifier: workspace:*
+        version: link:../../packages/application-service
       '@pi-workflow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -83,6 +114,25 @@ importers:
       '@temporalio/workflow':
         specifier: ^1.20.2
         version: 1.20.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+
+  packages/application-service:
+    dependencies:
+      '@pi-workflow/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pi-workflow/workflow-core':
+        specifier: workspace:*
+        version: link:../workflow-core
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1395,6 +1445,10 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -3504,6 +3558,8 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  commander@14.0.3: {}
 
   commander@2.20.3: {}
 
