@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./orchestrator-client": "./src/orchestrator-client.ts",
     "./sqlite": "./src/sqlite-workflow-repository.ts",
     "./sqlite-run-state": "./src/sqlite-run-state-repository.ts"
   },

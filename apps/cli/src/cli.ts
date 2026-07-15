@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
-  OrchestratorApplicationService,
-  OrchestratorClientError,
-  type RunControlOperation,
-  type ScheduleControlOperation,
-} from "@pi-workflow/application-service/orchestrator-client";
-import {
+  RunApplicationError,
   WorkflowApplicationError,
   type WorkflowApplicationService,
   AddWorkflowNodeInput,
@@ -13,10 +8,9 @@ import {
   ConnectWorkflowEdgeInput,
   UpdateWorkflowNodeInput,
 } from "@pi-workflow/application-service";
+import { LocalRuntime } from "@pi-workflow/local-runtime";
 import type {
   ApprovalDecision,
-  RegisterTemporalScheduleRequest,
-  StartTemporalRunRequest,
   WorkflowDefinition,
   WorkflowNodeType,
 } from "@pi-workflow/contracts";
@@ -37,7 +31,6 @@ interface GlobalOptions {
   json?: boolean;
   dryRun?: boolean;
   ifVersion?: number;
-  apiUrl: string;
 }
 
 type WorkflowCommandService = Pick<WorkflowApplicationService,
@@ -57,12 +50,11 @@ type WorkflowCommandService = Pick<WorkflowApplicationService,
 
 interface CliContext {
   workflows: WorkflowCommandService;
-  orchestrator: OrchestratorApplicationService;
+  runtime: LocalRuntime;
 }
 
 export interface CliDependencies {
-  workflows?: WorkflowCommandService;
-  orchestrator?: OrchestratorApplicationService;
+  runtime?: LocalRuntime;
 }
 
 class CliExit extends Error {
@@ -80,7 +72,6 @@ export function createProgram(context: CliContext): Command {
     .option("--json", "write machine-readable JSON to stdout")
     .option("--dry-run", "validate and preview mutations without writing or starting work")
     .addOption(new Option("--if-version <version>", "require the current workflow version").argParser(parseInteger))
-    .option("--api-url <url>", "Orchestrator API URL", process.env.PIWF_API_URL ?? "http://127.0.0.1:8787")
     .configureOutput({ writeErr: () => undefined })
     .showSuggestionAfterError();
 
@@ -88,21 +79,18 @@ export function createProgram(context: CliContext): Command {
   addNodeCommands(program, context);
   addEdgeCommands(program, context);
   addRunCommands(program, context);
-  addScheduleCommands(program, context);
   addModelCommands(program, context);
   return program;
 }
 
 export async function runCli(argv = process.argv, dependencies: CliDependencies = {}): Promise<number> {
   let json = argv.includes("--json");
+  const ownedRuntime = dependencies.runtime ? undefined : LocalRuntime.open();
+  const runtime = dependencies.runtime ?? ownedRuntime!;
   try {
-    const bootstrap = readBootstrapOptions(argv);
-    json = bootstrap.json === true;
-    const orchestrator = dependencies.orchestrator
-      ?? new OrchestratorApplicationService(bootstrap.apiUrl);
     const context: CliContext = {
-      workflows: dependencies.workflows ?? orchestrator,
-      orchestrator,
+      workflows: runtime.workflows,
+      runtime,
     };
     const program = createProgram(context);
     program.exitOverride();
@@ -114,6 +102,8 @@ export async function runCli(argv = process.argv, dependencies: CliDependencies 
       writeError({ error: { code: failure.code, message: failure.message, details: failure.details } }, json);
     }
     return failure.exitCode;
+  } finally {
+    ownedRuntime?.close();
   }
 }
 
@@ -230,94 +220,87 @@ function addEdgeCommands(program: Command, context: CliContext): void {
 }
 
 function addRunCommands(program: Command, context: CliContext): void {
-  const run = program.command("run").description("Start and control Temporal coding runs.");
+  const run = program.command("run").description("Create and control durable local coding runs.");
 
   run.command("start <workflow-id>")
     .requiredOption("--input <json-or-reference>", "run input as JSON/YAML, @file, or -")
     .action(async (workflowId: string, options: { input: string }, command) => {
       const input = asObject(await readInlineOrReferencedInput(options.input), "run input");
       const workflow = await context.workflows.getWorkflow(workflowId);
-      const request: StartTemporalRunRequest = {
-        ...(input as unknown as StartTemporalRunRequest),
-        runId: typeof input.runId === "string" ? input.runId : `RUN-${randomUUID()}`,
+      const repository = input.repositoryPath ?? input.repository;
+      if (typeof repository !== "string" || repository.trim().length === 0) {
+        throw new CliInputError("run input repositoryPath is required.");
+      }
+      const task = typeof input.task === "string" ? input.task : undefined;
+      const request = {
+        id: typeof input.runId === "string" ? input.runId : `RUN-${randomUUID()}`,
         workflowId,
         workflowVersion: workflow.definition.version,
+        title: typeof input.title === "string"
+          ? input.title
+          : task?.trim().split(/[.!?。！？]/)[0] || "Local coding run",
+        repository,
+        task,
       };
       if (globalOptions(command).dryRun) return output({ dryRun: true, request }, command);
-      output(await context.orchestrator.startRun(request), command);
+      await context.runtime.runs.createRun(request);
+      output(await context.runtime.runs.startRun(request.id), command);
     });
 
   run.command("list").action(async (_options, command) => {
-    output(await context.orchestrator.listRuns(), command);
+    output(await context.runtime.runs.listRuns(), command);
   });
 
-  run.command("inspect <workflow-id>").action(async (workflowId: string, _options, command) => {
-    output(await context.orchestrator.inspectRun(workflowId), command);
+  run.command("inspect <run-id>").action(async (runId: string, _options, command) => {
+    output({
+      run: await context.runtime.runs.getRun(runId),
+      events: await context.runtime.runs.listEvents(runId),
+      approvals: await context.runtime.runs.listApprovals(runId),
+    }, command);
   });
 
-  for (const operation of ["pause", "resume", "cancel"] as RunControlOperation[]) {
-    run.command(`${operation} <workflow-id>`).action(async (workflowId: string, _options, command) => {
-      if (globalOptions(command).dryRun) return output({ dryRun: true, workflowId, operation }, command);
-      await context.orchestrator.controlRun(workflowId, operation);
-      output({ workflowId, operation, accepted: true }, command);
+  for (const operation of ["pause", "resume", "cancel"] as const) {
+    run.command(`${operation} <run-id>`).action(async (runId: string, _options, command) => {
+      if (globalOptions(command).dryRun) return output({ dryRun: true, runId, operation }, command);
+      const result = operation === "pause"
+        ? await context.runtime.runs.pauseRun(runId)
+        : operation === "resume"
+          ? await context.runtime.runs.resumeRun(runId)
+          : await context.runtime.runs.cancelRun(runId);
+      output(result, command);
     });
   }
 
-  run.command("approve <workflow-id>")
+  run.command("approve <run-id>")
+    .option("--approval-id <approval-id>")
     .option("--reject", "reject instead of approve")
     .option("--note <note>")
-    .action(async (workflowId: string, options: { reject?: boolean; note?: string }, command) => {
+    .action(async (runId: string, options: { approvalId?: string; reject?: boolean; note?: string }, command) => {
       const decision: ApprovalDecision = { approved: !options.reject, note: options.note };
-      if (globalOptions(command).dryRun) return output({ dryRun: true, workflowId, decision }, command);
-      await context.orchestrator.approveRun(workflowId, decision);
-      output({ workflowId, decision, accepted: true }, command);
+      const approvals = await context.runtime.runs.listApprovals(runId);
+      const approvalId = options.approvalId
+        ?? approvals.find((approval) => approval.status === "pending")?.id;
+      if (!approvalId) throw new CliInputError(`Run '${runId}' has no pending approval.`);
+      if (globalOptions(command).dryRun) return output({ dryRun: true, runId, approvalId, decision }, command);
+      output(await context.runtime.runs.decideApproval(runId, approvalId, decision), command);
     });
-}
-
-function addScheduleCommands(program: Command, context: CliContext): void {
-  const schedule = program.command("schedule").description("Register and control Temporal schedules.");
-
-  schedule.command("create")
-    .requiredOption("--file <path>", "schedule request JSON/YAML, or - for stdin")
-    .action(async (options: { file: string }, command) => {
-      const request = await readStructuredInput(options.file) as RegisterTemporalScheduleRequest;
-      if (globalOptions(command).dryRun) return output({ dryRun: true, request }, command);
-      output(await context.orchestrator.registerSchedule(request), command);
-    });
-
-  schedule.command("inspect <schedule-id>").action(async (scheduleId: string, _options, command) => {
-    output(await context.orchestrator.describeSchedule(scheduleId), command);
-  });
-
-  for (const operation of ["pause", "resume", "trigger"] as ScheduleControlOperation[]) {
-    schedule.command(`${operation} <schedule-id>`).action(async (scheduleId: string, _options, command) => {
-      if (globalOptions(command).dryRun) return output({ dryRun: true, scheduleId, operation }, command);
-      output(await context.orchestrator.controlSchedule(scheduleId, operation), command);
-    });
-  }
-
-  schedule.command("delete <schedule-id>").action(async (scheduleId: string, _options, command) => {
-    if (globalOptions(command).dryRun) return output({ dryRun: true, scheduleId, operation: "delete" }, command);
-    await context.orchestrator.deleteSchedule(scheduleId);
-    output({ scheduleId, deleted: true }, command);
-  });
 }
 
 function addModelCommands(program: Command, context: CliContext): void {
-  const provider = program.command("provider").description("Inspect Orchestrator model providers.");
+  const provider = program.command("provider").description("Inspect local runtime model providers.");
   provider.command("list").action(async (_options, command) => {
-    output(await context.orchestrator.listProviders(), command);
+    output(context.runtime.modelRouting.listProviders(), command);
   });
   provider.command("test <provider-id>").action(async (providerId: string, _options, command) => {
-    output(await context.orchestrator.testProvider(providerId), command);
+    output(await context.runtime.modelRouting.testProvider(providerId), command);
   });
 
-  const route = program.command("route").description("Inspect and resolve Orchestrator model routes.");
+  const route = program.command("route").description("Inspect and resolve local model routes.");
   route.command("list").action(async (_options, command) => {
-    output(await context.orchestrator.listRoutes(), command);
+    output(context.runtime.modelRouting.listRoutes(), command);
   });
   route.command("resolve <route-id>").action(async (routeId: string, _options, command) => {
-    output(await context.orchestrator.resolveRoute(routeId), command);
+    output(context.runtime.modelRouting.resolveRoute(routeId), command);
   });
 }
 
@@ -332,27 +315,6 @@ function mutationOptions(command: Command): ChangeOptions {
 
 function globalOptions(command: Command): GlobalOptions {
   return command.optsWithGlobals<GlobalOptions>();
-}
-
-function readBootstrapOptions(argv: string[]): GlobalOptions {
-  return {
-    json: argv.includes("--json"),
-    dryRun: argv.includes("--dry-run"),
-    ifVersion: optionNumber(argv, "--if-version"),
-    apiUrl: optionValue(argv, "--api-url") ?? process.env.PIWF_API_URL ?? "http://127.0.0.1:8787",
-  };
-}
-
-function optionValue(argv: string[], name: string): string | undefined {
-  const prefixed = argv.find((value) => value.startsWith(`${name}=`));
-  if (prefixed) return prefixed.slice(name.length + 1);
-  const index = argv.indexOf(name);
-  return index >= 0 ? argv[index + 1] : undefined;
-}
-
-function optionNumber(argv: string[], name: string): number | undefined {
-  const value = optionValue(argv, name);
-  return value === undefined ? undefined : parseInteger(value);
 }
 
 async function readDefinition(reference: string): Promise<WorkflowDefinition> {
@@ -420,16 +382,14 @@ function classifyError(error: unknown): {
           : cliExitCodes.usage;
     return { code: error.code, message: error.message, details: error.details, exitCode };
   }
-  if (error instanceof OrchestratorClientError) {
-    const exitCode = error.code === "workflow_not_found" || error.code === "node_not_found"
+  if (error instanceof RunApplicationError) {
+    const exitCode = error.code === "run_not_found" || error.code === "approval_not_found"
       ? cliExitCodes.notFound
-      : error.code === "version_conflict" || error.code === "workflow_exists"
+      : error.code === "run_exists" || error.code === "run_state_conflict"
         ? cliExitCodes.conflict
-        : error.code === "validation_failed"
-          ? cliExitCodes.validation
-          : error.code === "input_invalid" || error.code === "edge_invalid"
-            ? cliExitCodes.usage
-            : cliExitCodes.remote;
+        : error.code === "input_invalid" || error.code === "run_transition_invalid"
+          ? cliExitCodes.usage
+          : cliExitCodes.failure;
     return { code: error.code, message: error.message, details: error.details, exitCode };
   }
   return {

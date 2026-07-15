@@ -7,6 +7,7 @@ import {
   InMemoryWorkflowRepository,
   WorkflowApplicationService,
 } from "@pi-workflow/application-service";
+import { LocalRuntime } from "@pi-workflow/local-runtime";
 import { runCli as executeCli } from "./cli.js";
 
 test("CLI applies workflows idempotently and reports version conflicts", async () => {
@@ -124,8 +125,32 @@ test("CLI returns stable usage and validation exit codes", async () => {
   }
 });
 
-function createService(): WorkflowApplicationService {
-  return new WorkflowApplicationService(new InMemoryWorkflowRepository());
+test("CLI run commands use the same in-process local runtime", async () => {
+  const runtime = createService();
+  const fixture = await createFixture("Local run workflow");
+  try {
+    assert.equal((await runCli([
+      "--json", "workflow", "create", "--file", fixture.file,
+    ], runtime)).status, 0);
+    const started = await runCli([
+      "--json", "run", "start", "cli-workflow",
+      "--input", "{ repositoryPath: '/repo', task: 'Implement local runtime' }",
+    ], runtime);
+    assert.equal(started.status, 0, started.stderr);
+    const runId = JSON.parse(started.stdout).run.id as string;
+    const inspected = await runCli(["--json", "run", "inspect", runId], runtime);
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.equal(JSON.parse(inspected.stdout).run.status, "running");
+    assert.equal(JSON.parse(inspected.stdout).events.length, 2);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+function createService(): LocalRuntime {
+  return LocalRuntime.createForTesting(
+    new WorkflowApplicationService(new InMemoryWorkflowRepository()),
+  );
 }
 
 async function createFixture(name = "CLI workflow"): Promise<{ file: string; cleanup: () => Promise<void> }> {
@@ -140,7 +165,7 @@ async function createFixture(name = "CLI workflow"): Promise<{ file: string; cle
 
 async function runCli(
   arguments_: string[],
-  workflows: WorkflowApplicationService,
+  runtime: LocalRuntime,
 ): Promise<{ status: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -155,7 +180,7 @@ async function runCli(
     return true;
   }) as typeof process.stderr.write;
   try {
-    const status = await executeCli(["node", "piwf", ...arguments_], { workflows });
+    const status = await executeCli(["node", "piwf", ...arguments_], { runtime });
     return { status, stdout: stdout.join(""), stderr: stderr.join("") };
   } finally {
     process.stdout.write = originalStdout;

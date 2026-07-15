@@ -7,7 +7,7 @@
     "piwf": "./dist/index.js"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire as __piwfCreateRequire } from 'node:module'; const require = __piwfCreateRequire(import.meta.url);\" --outfile=dist/index.js",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/*.test.ts"
@@ -15,6 +15,7 @@
   "dependencies": {
     "@pi-workflow/application-service": "workspace:*",
     "@pi-workflow/contracts": "workspace:*",
+    "@pi-workflow/local-runtime": "workspace:*",
     "commander": "^14.0.0",
     "yaml": "^2.8.1"
   },
