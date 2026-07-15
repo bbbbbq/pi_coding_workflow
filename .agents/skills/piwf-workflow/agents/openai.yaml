@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pi Workflow CLI"
+  short_description: "Manage Pi workflows safely with the piwf CLI"
+  default_prompt: "Use $piwf-workflow to validate and safely update a Pi workflow."
