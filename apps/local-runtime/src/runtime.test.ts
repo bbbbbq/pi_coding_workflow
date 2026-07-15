@@ -31,6 +31,33 @@ test("local runtime returns structured input errors", async () => {
   if (!response.ok) assert.equal(response.error.code, "input_invalid");
 });
 
+test("local runtime exposes durable run state commands", async () => {
+  const runtime = LocalRuntime.createForTesting(
+    new WorkflowApplicationService(new InMemoryWorkflowRepository()),
+  );
+  const created = await runtime.request({
+    id: "run-create",
+    method: "run.create",
+    params: {
+      input: {
+        id: "RUN-LOCAL",
+        workflowId: "workflow",
+        workflowVersion: 1,
+        title: "Local run",
+        repository: "/repo",
+      },
+    },
+  });
+  assert.equal(created.ok, true);
+  const started = await runtime.request({
+    id: "run-start",
+    method: "run.start",
+    params: { runId: "RUN-LOCAL" },
+  });
+  assert.equal(started.ok, true);
+  if (started.ok) assert.equal((started.result as { run: { status: string } }).run.status, "running");
+});
+
 function workflowDefinition(): Record<string, unknown> {
   return {
     id: "local-runtime-test",

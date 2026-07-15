@@ -3,6 +3,9 @@ export type WorkflowRunTrigger = "manual" | "schedule";
 export type WorkflowRunStatus =
   | "queued"
   | "running"
+  | "waiting_for_approval"
+  | "paused"
+  | "interrupted"
   | "review"
   | "completed"
   | "failed"
@@ -37,4 +40,32 @@ export interface WorkflowApproval {
   requestedAt: string;
   decidedAt?: string;
   comment?: string;
+}
+
+export const workflowRunEventTypes = [
+  "run_created",
+  "run_started",
+  "run_paused",
+  "run_resumed",
+  "approval_requested",
+  "approval_approved",
+  "approval_rejected",
+  "run_completed",
+  "run_failed",
+  "run_cancelled",
+  "run_interrupted",
+] as const;
+
+export type WorkflowRunEventType = (typeof workflowRunEventTypes)[number];
+
+export interface WorkflowRunEvent {
+  id: string;
+  runId: string;
+  sequence: number;
+  type: WorkflowRunEventType;
+  fromStatus?: WorkflowRunStatus;
+  toStatus: WorkflowRunStatus;
+  nodeId?: string;
+  payload?: unknown;
+  createdAt: string;
 }

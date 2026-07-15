@@ -11,6 +11,8 @@ import {
   workflowNodePorts,
 } from "@pi-workflow/workflow-core";
 
+export * from "./run-service.js";
+
 export type WorkflowLifecycleStatus = "draft" | "published";
 
 export interface WorkflowRecord {
