@@ -6,7 +6,7 @@
   "scripts": {
     "runtime:build": "pnpm --filter @pi-workflow/local-runtime build",
     "dev": "pnpm runtime:build && vite",
-    "build": "pnpm runtime:build && tsc && vite build",
+    "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri"
   },
@@ -26,6 +26,7 @@
     "react-i18next": "^17.0.9"
   },
   "devDependencies": {
+    "@pi-workflow/local-runtime": "workspace:*",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

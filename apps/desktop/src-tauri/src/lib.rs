@@ -210,17 +210,10 @@ pub fn run() {
         kind: MigrationKind::Up,
     }, Migration {
         version: 2,
-        description: "add_temporal_execution_metadata",
+        description: "add_local_schedule_inputs",
         sql: r#"
             ALTER TABLE schedules ADD COLUMN repository_path TEXT NOT NULL DEFAULT '';
             ALTER TABLE schedules ADD COLUMN task TEXT NOT NULL DEFAULT '';
-            ALTER TABLE schedules ADD COLUMN temporal_schedule_id TEXT;
-            ALTER TABLE workflow_runs ADD COLUMN temporal_workflow_id TEXT;
-            ALTER TABLE workflow_runs ADD COLUMN temporal_run_id TEXT;
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_schedules_temporal_id
-                ON schedules(temporal_schedule_id);
-            CREATE INDEX IF NOT EXISTS idx_workflow_runs_temporal_id
-                ON workflow_runs(temporal_workflow_id);
         "#,
         kind: MigrationKind::Up,
     }, Migration {

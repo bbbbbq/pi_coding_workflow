@@ -25,8 +25,6 @@ export interface WorkflowRunRecord {
   updatedAt: string;
   completedAt?: string;
   result?: unknown;
-  temporalWorkflowId?: string;
-  temporalRunId?: string;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";

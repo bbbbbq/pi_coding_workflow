@@ -56,7 +56,7 @@ test("lists providers and resolves configured routes without exposing credential
   });
 });
 
-test("provider test reports a missing Orchestrator credential before network access", async () => {
+test("provider test reports a missing local credential before network access", async () => {
   delete process.env.PI_WORKFLOW_SECRET_PROVIDER_A;
   const service = new ModelRoutingService(config);
   const health = await service.testProvider("provider-a");

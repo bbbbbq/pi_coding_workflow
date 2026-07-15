@@ -55,7 +55,6 @@ interface ScheduleRow {
   scheduled_at: string;
   next_run_at: string | null;
   last_run_at: string | null;
-  temporal_schedule_id: string | null;
   time_zone: string;
   enabled: number;
   created_at: string;
@@ -245,9 +244,9 @@ async function saveSqliteSchedule(database: Database, schedule: WorkflowSchedule
   await database.execute(`
     INSERT INTO schedules (
       id, name, workflow_id, workflow_name, workflow_version, repository_path, task, frequency,
-      scheduled_at, next_run_at, last_run_at, temporal_schedule_id,
+      scheduled_at, next_run_at, last_run_at,
       time_zone, enabled, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       workflow_name = excluded.workflow_name,
@@ -258,7 +257,6 @@ async function saveSqliteSchedule(database: Database, schedule: WorkflowSchedule
       scheduled_at = excluded.scheduled_at,
       next_run_at = excluded.next_run_at,
       last_run_at = excluded.last_run_at,
-      temporal_schedule_id = excluded.temporal_schedule_id,
       time_zone = excluded.time_zone,
       enabled = excluded.enabled,
       updated_at = excluded.updated_at
@@ -274,7 +272,6 @@ async function saveSqliteSchedule(database: Database, schedule: WorkflowSchedule
     schedule.scheduledAt,
     schedule.nextRunAt ?? null,
     schedule.lastRunAt ?? null,
-    schedule.temporalScheduleId ?? null,
     schedule.timeZone,
     schedule.enabled ? 1 : 0,
     schedule.createdAt,
@@ -295,7 +292,6 @@ function scheduleFromRow(row: ScheduleRow): WorkflowSchedule {
     scheduledAt: row.scheduled_at,
     nextRunAt: row.next_run_at ?? undefined,
     lastRunAt: row.last_run_at ?? undefined,
-    temporalScheduleId: row.temporal_schedule_id ?? undefined,
     timeZone: row.time_zone,
     enabled: row.enabled === 1,
     createdAt: row.created_at,

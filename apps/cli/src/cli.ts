@@ -24,7 +24,7 @@ export const cliExitCodes = {
   notFound: 3,
   validation: 4,
   conflict: 5,
-  remote: 6,
+  runtime: 6,
 } as const;
 
 interface GlobalOptions {

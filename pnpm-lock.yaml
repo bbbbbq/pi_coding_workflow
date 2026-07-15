@@ -81,6 +81,9 @@ importers:
         specifier: ^17.0.9
         version: 17.0.9(i18next@26.3.6(typescript@5.8.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.8.3)
     devDependencies:
+      '@pi-workflow/local-runtime':
+        specifier: workspace:*
+        version: link:../local-runtime
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.11.4

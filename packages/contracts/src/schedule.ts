@@ -14,7 +14,6 @@ export interface WorkflowSchedule {
   scheduledAt: string;
   nextRunAt?: string;
   lastRunAt?: string;
-  temporalScheduleId?: string;
   timeZone: string;
   enabled: boolean;
   createdAt: string;

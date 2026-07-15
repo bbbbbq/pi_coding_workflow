@@ -67,5 +67,4 @@ export interface CodingWorkflowResult {
 export * from "./workflow.js";
 export * from "./schedule.js";
 export * from "./persistence.js";
-export * from "./temporal.js";
 export * from "./model-routing.js";

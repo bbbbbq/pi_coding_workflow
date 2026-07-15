@@ -28,8 +28,6 @@ interface RunRow {
   updated_at: string;
   completed_at: string | null;
   result_json: string | null;
-  temporal_workflow_id: string | null;
-  temporal_run_id: string | null;
 }
 
 interface EventRow {
@@ -76,9 +74,7 @@ export class SqliteRunStateRepository implements RunStateRepository, Disposable 
         started_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         completed_at TEXT,
-        result_json TEXT,
-        temporal_workflow_id TEXT,
-        temporal_run_id TEXT
+        result_json TEXT
       );
       CREATE TABLE IF NOT EXISTS local_run_events (
         id TEXT PRIMARY KEY NOT NULL,
@@ -202,15 +198,13 @@ export class SqliteRunStateRepository implements RunStateRepository, Disposable 
       INSERT INTO local_workflow_runs (
         id, workflow_id, workflow_version, schedule_id, trigger_type,
         title, repository, task, status, started_at, updated_at,
-        completed_at, result_json, temporal_workflow_id, temporal_run_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        completed_at, result_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         status = excluded.status,
         updated_at = excluded.updated_at,
         completed_at = excluded.completed_at,
-        result_json = excluded.result_json,
-        temporal_workflow_id = excluded.temporal_workflow_id,
-        temporal_run_id = excluded.temporal_run_id
+        result_json = excluded.result_json
     `).run(
       run.id,
       run.workflowId,
@@ -225,8 +219,6 @@ export class SqliteRunStateRepository implements RunStateRepository, Disposable 
       run.updatedAt,
       run.completedAt ?? null,
       run.result === undefined ? null : JSON.stringify(run.result),
-      run.temporalWorkflowId ?? null,
-      run.temporalRunId ?? null,
     );
   }
 
@@ -276,8 +268,6 @@ function runFromRow(row: RunRow): WorkflowRunRecord {
     updatedAt: row.updated_at,
     completedAt: row.completed_at ?? undefined,
     result: row.result_json ? JSON.parse(row.result_json) : undefined,
-    temporalWorkflowId: row.temporal_workflow_id ?? undefined,
-    temporalRunId: row.temporal_run_id ?? undefined,
   };
 }
 

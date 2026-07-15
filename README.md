@@ -1,27 +1,35 @@
 # Pi Coding Workflow
 
-A cross-platform desktop workspace for durable, reviewable coding-agent runs.
+A local-first desktop workspace for durable, reviewable coding-agent workflows.
 
-## Technology route
+## Architecture
 
 - Desktop: Tauri 2 + React 19 + TypeScript + Vite
+- Local runtime: bundled Node.js process using JSON Lines over stdin/stdout
 - Coding executor: Pi SDK
-- Durable orchestration: Temporal TypeScript SDK
-- Workspace isolation: Git worktree first, container or microVM next
-- Shared contracts: TypeScript workspace package
-- Persistence: Orchestrator-owned SQLite for Workflows; Tauri SQLite for desktop-local settings and mirrors
+- Application layer: shared TypeScript services for Workflows and Run state
+- Persistence: SQLite with optimistic Workflow versions and append-only Run events
+- Workspace isolation: Git worktree first, container or microVM later
 
-Tauri is the desktop shell for macOS, Windows, and Linux. Pi owns the inner coding-agent loop. Temporal owns long-running task stages, retries, approval gates, cancellation, and recovery.
-
-## Repository layout
+No HTTP server, WebSocket, Docker service, or local TCP port is required. Desktop launches the local
+runtime as a child process and communicates through Tauri commands. `piwf` imports the same runtime
+in-process.
 
 ```text
-apps/desktop       Tauri desktop application
-apps/cli           Non-interactive piwf CLI
-apps/local-runtime Local workflow runtime (Temporal transition scaffold)
-packages/application-service Shared use cases and persistence/gateway ports
-packages/contracts Shared workflow types
-packages/pi-adapter Pi SDK integration boundary
+Desktop UI --Tauri IPC/stdin--> Local Runtime --+--> Application Service
+piwf CLI ---------------------> Local Runtime --+--> SQLite / Pi / Git
+```
+
+## Repository Layout
+
+```text
+apps/desktop        Tauri desktop application
+apps/cli            Non-interactive piwf CLI
+apps/local-runtime  Local stdio runtime and Pi integration boundary
+packages/application-service  Workflow and Run use cases plus persistence ports
+packages/contracts  Shared workflow, run, schedule, and model types
+packages/pi-adapter Pi SDK and model-routing adapter
+packages/workflow-core Workflow validation and schedule calculations
 ```
 
 ## Development
@@ -31,64 +39,65 @@ pnpm install
 pnpm dev:desktop
 ```
 
-Build and invoke the non-interactive CLI with:
+The Desktop dev/build scripts build `apps/local-runtime/dist/piwf-runtime.js` automatically. The
+current sidecar launcher requires Node.js 22 or newer to be installed. Production packaging still
+needs a target-specific bundled Node executable before the desktop installer is fully standalone.
+
+Build and invoke the CLI:
 
 ```bash
 pnpm --filter @pi-workflow/cli build
-node apps/cli/dist/index.js --help
-node apps/cli/dist/index.js --json workflow list
+node --disable-warning=ExperimentalWarning apps/cli/dist/index.js --help
+node --disable-warning=ExperimentalWarning apps/cli/dist/index.js --json workflow list
 ```
 
-`piwf` is an HTTP client and never opens the Workflow database. It connects to
-`http://127.0.0.1:8787` by default; override that with `PIWF_API_URL` or `--api-url`. Workflow,
-node, and edge mutations support `--dry-run` and `--if-version`; every command supports `--json`.
-JSON/YAML input accepts a file path, `@file`, or `-` for stdin where the command exposes `--file`,
-`--config`, or `--input`.
+Both Desktop and CLI use `~/.pi-workflow/piwf.db` by default. Override it for development or testing
+with `PI_WORKFLOW_DATABASE`. Model routing can be loaded with
+`PI_WORKFLOW_MODEL_ROUTING_FILE=/absolute/path/model-routing.json`; provider credentials use
+`PI_WORKFLOW_SECRET_<NORMALIZED_SECRET_REF>` in the runtime environment.
+
+Workflow, node, and edge mutations support `--dry-run` and `--if-version`; every CLI command supports
+`--json`. JSON/YAML inputs accept a file path, `@file`, or `-` for stdin where exposed by the command.
 
 ```bash
 piwf workflow apply --file workflow.yaml --if-version 3 --json
 piwf node add coding-workflow --type pi-agent --config @agent.yaml --dry-run --json
 piwf edge connect coding-workflow trigger agent --source-port started --target-port input --json
+piwf run start coding-workflow --input '{ repositoryPath: "/code/project", task: "Fix tests" }' --json
 ```
 
 Successful business output is written to stdout and diagnostics to stderr. Stable exit codes are
-`0` success, `2` usage/input, `3` not found, `4` validation, `5` version conflict, and `6`
-Orchestrator/API failure.
+`0` success, `1` unexpected failure, `2` usage/input, `3` not found, `4` validation, `5` state or
+version conflict, and `6` runtime failure.
 
-To run durable scheduling locally, start Temporal Server and the long-lived Orchestrator before opening the desktop app:
+## Persistence Ownership
 
-```bash
-docker compose -f infra/temporal/docker-compose.yml up -d
-pnpm dev:orchestrator
-pnpm dev:desktop
-```
+The local runtime owns authoritative Workflow definitions, versions, Run records, ordered Run events,
+and approvals. Run transitions and their events are committed atomically. Desktop keeps a separate
+Tauri SQLite database only for UI settings, model configuration, legacy migration data, and local
+schedule definitions.
 
-The Temporal UI is available at `http://localhost:8233`. The Orchestrator exposes a loopback-only API at
-`http://127.0.0.1:8787`; Desktop and CLI use it for Workflow CRUD and runtime operations. The
-Orchestrator is the only process that opens the Workflow SQLite database. It defaults to
-`~/.pi-workflow/piwf.db` and can be changed with `PI_WORKFLOW_DATABASE`. `pnpm dev:worker` is still
-available when the API and Worker need to run as separate processes, and `pnpm dev:temporal-api` starts
-only the API.
+On upgrade, Desktop imports its latest legacy Workflow into the runtime database only when that
+database is empty. It no longer writes Workflow or Run state to the Tauri database.
 
-All CLI commands use that API. Configure model discovery with
-`PI_WORKFLOW_MODEL_ROUTING_FILE=/absolute/path/model-routing.json`; the file contains
-`ModelRoutingConfig` without credential values. Provider credentials remain in
-`PI_WORKFLOW_SECRET_<NORMALIZED_SECRET_REF>` environment variables on the Orchestrator process.
+## Current Scope
 
-## Current scope
+Implemented:
 
-The repository contains the first executable desktop shell and a Temporal-backed Workflow/Pi execution path. The
-Orchestrator API creates idempotent Temporal Schedules, applies a 24-hour catch-up window, pauses schedules after
-repeated failures, and exposes pause/resume/cancel/approval signals for running coding Workflows. Activity calls use
-exponential retries and the Workflow keeps its state in Temporal history, so the Temporal Server and Orchestrator can
-continue a run after the desktop app exits.
+- Visual Workflow editor and structural validation
+- Idempotent Workflow apply, publication, dry-run, and optimistic version checks
+- Shared Desktop/CLI local runtime with no network transport
+- Durable Run state machine with ordered events, pause/resume/interruption, and approval gates
+- SQLite persistence for Workflows, Runs, events, and approvals
+- Pi model routing and provider health checks
+- Local schedule definition management in Desktop
 
-The Orchestrator stores the authoritative Workflow definitions, versions, and publication state. On
-upgrade, Desktop imports its latest legacy local Workflow only when the server database is empty. The
-desktop `pi-workflow.db` retains one-time/daily/weekly schedule mirrors, run records, approvals, model
-configuration, and settings. The UI is supported only inside the Tauri desktop shell; Vite remains an
-internal build and hot-reload tool for Tauri.
+Not yet implemented:
 
-Desktop SQLite stores a local mirror of schedule intent and Temporal execution identifiers. Temporal is the source of
-truth for the clock, retries, catch-up, pause/resume state, and scheduled Workflow execution. The Orchestrator process
-must remain running independently of the desktop app; for production, run it as a system service or container.
+- Graph interpretation that executes every visual node type
+- Connecting `run start` to the Pi coding executor and validation loop
+- OS scheduler integration for running schedules while Desktop is closed
+- Target-specific bundling of the Node runtime executable
+
+Without a resident process, active Agent work cannot continue after both Desktop and CLI exit. Stored
+Runs can be marked interrupted and resumed on a later launch.

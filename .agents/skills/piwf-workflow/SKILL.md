@@ -1,11 +1,11 @@
 ---
 name: piwf-workflow
-description: Manage Pi Coding Workflow definitions, nodes, edges, runs, schedules, model providers, and routes through the repository's non-interactive piwf CLI. Use when Codex needs to inspect, validate, create, apply, publish, or delete workflows; edit graph nodes or connections; control Temporal runs or schedules; or query model routing with structured JSON and optimistic version protection.
+description: Manage local Pi Coding Workflow definitions, nodes, edges, durable runs, approvals, model providers, and routes through the repository's non-interactive piwf CLI. Use when Codex needs to inspect, validate, create, apply, publish, or delete workflows; edit graph nodes or connections; control local run state; or query model routing with structured JSON and optimistic version protection.
 ---
 
 # Pi Workflow CLI
 
-Use `piwf` as the supported automation boundary for Pi Coding Workflow. Run commands from the repository root. Require the Orchestrator API for every command that reads or changes application state.
+Use `piwf` as the supported automation boundary for Pi Coding Workflow. Run commands from the repository root. The CLI loads the same local runtime as Desktop and does not use HTTP or a local port.
 
 ## Prepare The CLI
 
@@ -18,10 +18,10 @@ pnpm --filter @pi-workflow/cli build
 Invoke the built CLI for clean machine-readable output:
 
 ```bash
-node apps/cli/dist/index.js --json workflow list
+node --disable-warning=ExperimentalWarning apps/cli/dist/index.js --json workflow list
 ```
 
-Use `--api-url <url>` or `PIWF_API_URL` to select the Orchestrator; the default is `http://127.0.0.1:8787`. Never pass a database path to `piwf`: only the Orchestrator opens the authoritative Workflow SQLite configured by `PI_WORKFLOW_DATABASE`.
+Use `PI_WORKFLOW_DATABASE` only when an isolated development or test database is required. Desktop and CLI otherwise share `~/.pi-workflow/piwf.db`.
 
 ## Follow The Safe Mutation Flow
 
@@ -79,20 +79,19 @@ Use `node add`, `node update`, `node enable`, `node disable`, `node remove`, and
 
 ## Control Runtime Operations
 
-Start the Orchestrator before using any stateful command. Supply `--api-url` when it is not on the default loopback address.
+The CLI starts the local runtime in-process; do not start a server first.
 
-- Use `run start/list/inspect/pause/resume/cancel/approve` for Temporal runs.
-- Use `schedule create/inspect/pause/resume/trigger/delete` for Temporal schedules.
+- Use `run start/list/inspect/pause/resume/cancel/approve` for durable local runs.
 - Use `provider list/test` and `route list/resolve` for model routing.
-- Add `--dry-run` to mutating remote commands to preview requests without sending them.
+- Add `--dry-run` to supported mutations before writing state.
 
-Do not invent a `set-status` operation or directly mark a node completed. Runtime state must come from execution events. Use only the policy-controlled run and schedule commands exposed by `piwf`.
+Do not invent a `set-status` operation or directly mark a node completed. Runtime state must come from ordered execution events. Use only the policy-controlled run commands exposed by `piwf`.
 
 ## Preserve Automation Contracts
 
 - Always request `--json`; parse stdout as business data and treat stderr as diagnostics.
 - Keep CLI invocations non-interactive. Use files or stdin instead of terminal menus.
-- Never open or edit the Workflow SQLite from Desktop, CLI, or raw SQL. Let `piwf` call the Orchestrator API, which owns the application service and repository adapter.
-- Never place API keys in command arguments. Keep provider credentials in the configured secure store or Orchestrator environment.
+- Never edit the SQLite database with raw SQL. Let `piwf` call the local runtime, application service, and repository adapters.
+- Never place API keys in command arguments. Keep provider credentials in the configured secure store or runtime environment.
 - Inspect command-specific options with `piwf <group> <command> --help` instead of guessing flags.
-- Treat exit codes as stable: `0` success, `2` usage/input, `3` not found, `4` validation, `5` version conflict, `6` Orchestrator/API failure, and `1` unexpected failure.
+- Treat exit codes as stable: `0` success, `2` usage/input, `3` not found, `4` validation, `5` state/version conflict, `6` runtime failure, and `1` unexpected failure.

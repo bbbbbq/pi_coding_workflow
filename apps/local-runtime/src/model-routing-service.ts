@@ -58,7 +58,7 @@ export class ModelRoutingService {
         checkedAt,
         latencyMs: Date.now() - startedAt,
         errorCode: "secret_missing",
-        message: "The provider credential is not available to the Orchestrator.",
+        message: "The provider credential is not available to the local runtime.",
       };
     }
 
