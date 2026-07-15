@@ -18,7 +18,7 @@ Tauri is the desktop shell for macOS, Windows, and Linux. Pi owns the inner codi
 ```text
 apps/desktop       Tauri desktop application
 apps/cli           Non-interactive piwf CLI
-apps/orchestrator  Temporal workflow and worker
+apps/local-runtime Local workflow runtime (Temporal transition scaffold)
 packages/application-service Shared use cases and persistence/gateway ports
 packages/contracts Shared workflow types
 packages/pi-adapter Pi SDK integration boundary

@@ -5,9 +5,9 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev:desktop": "pnpm --filter @pi-workflow/desktop tauri dev",
-    "dev:worker": "pnpm --filter @pi-workflow/orchestrator dev",
-    "dev:orchestrator": "pnpm --filter @pi-workflow/orchestrator dev:orchestrator",
-    "dev:temporal-api": "pnpm --filter @pi-workflow/orchestrator dev:api",
+    "dev:worker": "pnpm --filter @pi-workflow/local-runtime dev",
+    "dev:orchestrator": "pnpm --filter @pi-workflow/local-runtime dev:orchestrator",
+    "dev:temporal-api": "pnpm --filter @pi-workflow/local-runtime dev:api",
     "piwf": "pnpm --filter @pi-workflow/cli dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",

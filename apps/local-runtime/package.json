@@ -1,5 +1,5 @@
 {
-  "name": "@pi-workflow/orchestrator",
+  "name": "@pi-workflow/local-runtime",
   "private": true,
   "version": "0.1.0",
   "type": "module",
