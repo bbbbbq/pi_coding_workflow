@@ -9,7 +9,7 @@ A cross-platform desktop workspace for durable, reviewable coding-agent runs.
 - Durable orchestration: Temporal TypeScript SDK
 - Workspace isolation: Git worktree first, container or microVM next
 - Shared contracts: TypeScript workspace package
-- Persistence: Tauri SQL plugin + SQLite
+- Persistence: Orchestrator-owned SQLite for Workflows; Tauri SQLite for desktop-local settings and mirrors
 
 Tauri is the desktop shell for macOS, Windows, and Linux. Pi owns the inner coding-agent loop. Temporal owns long-running task stages, retries, approval gates, cancellation, and recovery.
 
@@ -36,13 +36,14 @@ Build and invoke the non-interactive CLI with:
 ```bash
 pnpm --filter @pi-workflow/cli build
 node apps/cli/dist/index.js --help
-node --disable-warning=ExperimentalWarning apps/cli/dist/index.js --json workflow list
+node apps/cli/dist/index.js --json workflow list
 ```
 
-`piwf` stores Workflow definitions in `~/.pi-workflow/piwf.db` by default. Override it with
-`PIWF_DATABASE` or `--database`. Workflow, node, and edge mutations support `--dry-run` and
-`--if-version`; every command supports `--json`. JSON/YAML input accepts a file path, `@file`, or
-`-` for stdin where the command exposes `--file`, `--config`, or `--input`.
+`piwf` is an HTTP client and never opens the Workflow database. It connects to
+`http://127.0.0.1:8787` by default; override that with `PIWF_API_URL` or `--api-url`. Workflow,
+node, and edge mutations support `--dry-run` and `--if-version`; every command supports `--json`.
+JSON/YAML input accepts a file path, `@file`, or `-` for stdin where the command exposes `--file`,
+`--config`, or `--input`.
 
 ```bash
 piwf workflow apply --file workflow.yaml --if-version 3 --json
@@ -63,11 +64,13 @@ pnpm dev:desktop
 ```
 
 The Temporal UI is available at `http://localhost:8233`. The Orchestrator exposes a loopback-only API at
-`http://127.0.0.1:8787`; the desktop app uses it to register and control Temporal Schedules. `pnpm dev:worker`
-is still available when the API and Worker need to run as separate processes, and `pnpm dev:temporal-api`
-starts only the API.
+`http://127.0.0.1:8787`; Desktop and CLI use it for Workflow CRUD and runtime operations. The
+Orchestrator is the only process that opens the Workflow SQLite database. It defaults to
+`~/.pi-workflow/piwf.db` and can be changed with `PI_WORKFLOW_DATABASE`. `pnpm dev:worker` is still
+available when the API and Worker need to run as separate processes, and `pnpm dev:temporal-api` starts
+only the API.
 
-CLI run, schedule, provider, and route commands use that API. Configure model discovery with
+All CLI commands use that API. Configure model discovery with
 `PI_WORKFLOW_MODEL_ROUTING_FILE=/absolute/path/model-routing.json`; the file contains
 `ModelRoutingConfig` without credential values. Provider credentials remain in
 `PI_WORKFLOW_SECRET_<NORMALIZED_SECRET_REF>` environment variables on the Orchestrator process.
@@ -80,7 +83,11 @@ repeated failures, and exposes pause/resume/cancel/approval signals for running 
 exponential retries and the Workflow keeps its state in Temporal history, so the Temporal Server and Orchestrator can
 continue a run after the desktop app exits.
 
-The desktop app stores Workflow definitions and versions, one-time/daily/weekly schedules, run records, approvals, and settings in `pi-workflow.db` under the Tauri application data directory. The UI is supported only inside the Tauri desktop shell; Vite remains an internal build and hot-reload tool for Tauri.
+The Orchestrator stores the authoritative Workflow definitions, versions, and publication state. On
+upgrade, Desktop imports its latest legacy local Workflow only when the server database is empty. The
+desktop `pi-workflow.db` retains one-time/daily/weekly schedule mirrors, run records, approvals, model
+configuration, and settings. The UI is supported only inside the Tauri desktop shell; Vite remains an
+internal build and hot-reload tool for Tauri.
 
 Desktop SQLite stores a local mirror of schedule intent and Temporal execution identifiers. Temporal is the source of
 truth for the clock, retries, catch-up, pause/resume state, and scheduled Workflow execution. The Orchestrator process

@@ -6,8 +6,10 @@ import type {
   TemporalRunRef,
   TemporalScheduleRef,
 } from "@pi-workflow/contracts";
+import { OrchestratorApplicationService } from "@pi-workflow/application-service/orchestrator-client";
 
-const apiBaseUrl = (import.meta.env.VITE_TEMPORAL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+export const temporalApiBaseUrl = (import.meta.env.VITE_TEMPORAL_API_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+export const orchestratorApplication = new OrchestratorApplicationService(temporalApiBaseUrl);
 
 export async function getTemporalHealth(): Promise<TemporalHealth> {
   return request<TemporalHealth>("/health");
@@ -68,7 +70,7 @@ export async function approveTemporalRun(
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(`${temporalApiBaseUrl}${path}`, {
     ...options,
     headers: {
       "content-type": "application/json",

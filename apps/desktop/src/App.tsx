@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  WorkflowApplicationError,
-  WorkflowApplicationService,
-} from "@pi-workflow/application-service";
+  OrchestratorClientError,
+  type OrchestratorApplicationService,
+} from "@pi-workflow/application-service/orchestrator-client";
+import { useCallback, useEffect, useState } from "react";
 import type {
   ModelProvider,
   ModelRoute,
@@ -25,6 +25,7 @@ import type { SupportedLanguage } from "./i18n";
 import { ScheduleManager } from "./schedules/ScheduleManager";
 import { useWorkflowSchedules } from "./schedules/useWorkflowSchedules";
 import {
+  getLatestWorkflowDefinition,
   getSetting,
   initializePersistence,
   listModelProviders,
@@ -32,10 +33,10 @@ import {
   listRuns,
   saveRun,
   saveSetting,
-  TauriWorkflowRepository,
 } from "./storage/repository";
 import {
   getTemporalHealth,
+  orchestratorApplication,
   startTemporalRun,
 } from "./temporal/client";
 import { createExampleWorkflow } from "./workflow/exampleWorkflow";
@@ -53,10 +54,7 @@ function App() {
   const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
   const [modelRoutes, setModelRoutes] = useState<ModelRoute[]>([]);
   const [temporalAvailable, setTemporalAvailable] = useState<boolean | undefined>();
-  const workflowApplication = useMemo(
-    () => new WorkflowApplicationService(new TauriWorkflowRepository()),
-    [],
-  );
+  const workflowApplication = orchestratorApplication;
   const currentLanguage: SupportedLanguage = i18n.resolvedLanguage?.startsWith("zh")
     ? "zh-CN"
     : "en";
@@ -75,10 +73,16 @@ function App() {
       if (savedLanguage === "en" || savedLanguage === "zh-CN") {
         await i18n.changeLanguage(savedLanguage);
       }
-      const workflow = await loadOrCreateWorkflow(workflowApplication);
+      const legacyWorkflow = await getLatestWorkflowDefinition();
       const runs = await listRuns();
       const providers = await listModelProviders();
       const routes = await listModelRoutes();
+      let workflow = legacyWorkflow ?? createExampleWorkflow();
+      try {
+        workflow = await loadOrCreateWorkflow(workflowApplication, legacyWorkflow);
+      } catch (error) {
+        console.error("Failed to load Workflow from Orchestrator", error);
+      }
       if (!cancelled) {
         setCurrentWorkflow(workflow);
         setPersistedRuns(runs);
@@ -306,16 +310,17 @@ function App() {
 export default App;
 
 async function loadOrCreateWorkflow(
-  application: WorkflowApplicationService,
+  application: OrchestratorApplicationService,
+  legacyWorkflow?: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
   const savedWorkflows = await application.listWorkflows();
   if (savedWorkflows[0]) {
     return (await application.getWorkflow(savedWorkflows[0].id)).definition;
   }
   try {
-    return (await application.createWorkflow(createExampleWorkflow())).workflow.definition;
+    return (await application.createWorkflow(legacyWorkflow ?? createExampleWorkflow())).workflow.definition;
   } catch (error) {
-    if (!(error instanceof WorkflowApplicationError) || error.code !== "version_conflict") throw error;
-    return (await application.getWorkflow(createExampleWorkflow().id)).definition;
+    if (!(error instanceof OrchestratorClientError) || error.code !== "version_conflict") throw error;
+    return (await application.getWorkflow((legacyWorkflow ?? createExampleWorkflow()).id)).definition;
   }
 }

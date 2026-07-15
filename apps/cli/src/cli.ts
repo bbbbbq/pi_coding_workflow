@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import {
   OrchestratorApplicationService,
   OrchestratorClientError,
@@ -9,16 +7,12 @@ import {
 } from "@pi-workflow/application-service/orchestrator-client";
 import {
   WorkflowApplicationError,
-  WorkflowApplicationService,
-  type AddWorkflowNodeInput,
-  type ChangeOptions,
-  type ConnectWorkflowEdgeInput,
-  type UpdateWorkflowNodeInput,
-  type WorkflowRecord,
-  type WorkflowRepository,
-  type WorkflowSaveOptions,
+  type WorkflowApplicationService,
+  AddWorkflowNodeInput,
+  ChangeOptions,
+  ConnectWorkflowEdgeInput,
+  UpdateWorkflowNodeInput,
 } from "@pi-workflow/application-service";
-import type { SqliteWorkflowRepository } from "@pi-workflow/application-service/sqlite";
 import type {
   ApprovalDecision,
   RegisterTemporalScheduleRequest,
@@ -43,13 +37,32 @@ interface GlobalOptions {
   json?: boolean;
   dryRun?: boolean;
   ifVersion?: number;
-  database: string;
   apiUrl: string;
 }
 
+type WorkflowCommandService = Pick<WorkflowApplicationService,
+  | "listWorkflows"
+  | "getWorkflow"
+  | "createWorkflow"
+  | "applyWorkflow"
+  | "validateWorkflow"
+  | "publishWorkflow"
+  | "deleteWorkflow"
+  | "addNode"
+  | "updateNode"
+  | "setNodeEnabled"
+  | "removeNode"
+  | "connectEdge"
+>;
+
 interface CliContext {
-  workflows: WorkflowApplicationService;
+  workflows: WorkflowCommandService;
   orchestrator: OrchestratorApplicationService;
+}
+
+export interface CliDependencies {
+  workflows?: WorkflowCommandService;
+  orchestrator?: OrchestratorApplicationService;
 }
 
 class CliExit extends Error {
@@ -67,7 +80,6 @@ export function createProgram(context: CliContext): Command {
     .option("--json", "write machine-readable JSON to stdout")
     .option("--dry-run", "validate and preview mutations without writing or starting work")
     .addOption(new Option("--if-version <version>", "require the current workflow version").argParser(parseInteger))
-    .option("--database <path>", "workflow SQLite database", defaultDatabasePath())
     .option("--api-url <url>", "Orchestrator API URL", process.env.PIWF_API_URL ?? "http://127.0.0.1:8787")
     .configureOutput({ writeErr: () => undefined })
     .showSuggestionAfterError();
@@ -81,16 +93,16 @@ export function createProgram(context: CliContext): Command {
   return program;
 }
 
-export async function runCli(argv = process.argv): Promise<number> {
-  let repository: LazyWorkflowRepository | undefined;
+export async function runCli(argv = process.argv, dependencies: CliDependencies = {}): Promise<number> {
   let json = argv.includes("--json");
   try {
     const bootstrap = readBootstrapOptions(argv);
     json = bootstrap.json === true;
-    repository = new LazyWorkflowRepository(bootstrap.database);
+    const orchestrator = dependencies.orchestrator
+      ?? new OrchestratorApplicationService(bootstrap.apiUrl);
     const context: CliContext = {
-      workflows: new WorkflowApplicationService(repository),
-      orchestrator: new OrchestratorApplicationService(bootstrap.apiUrl),
+      workflows: dependencies.workflows ?? orchestrator,
+      orchestrator,
     };
     const program = createProgram(context);
     program.exitOverride();
@@ -102,8 +114,6 @@ export async function runCli(argv = process.argv): Promise<number> {
       writeError({ error: { code: failure.code, message: failure.message, details: failure.details } }, json);
     }
     return failure.exitCode;
-  } finally {
-    repository?.close();
   }
 }
 
@@ -329,7 +339,6 @@ function readBootstrapOptions(argv: string[]): GlobalOptions {
     json: argv.includes("--json"),
     dryRun: argv.includes("--dry-run"),
     ifVersion: optionNumber(argv, "--if-version"),
-    database: optionValue(argv, "--database") ?? process.env.PIWF_DATABASE ?? defaultDatabasePath(),
     apiUrl: optionValue(argv, "--api-url") ?? process.env.PIWF_API_URL ?? "http://127.0.0.1:8787",
   };
 }
@@ -350,14 +359,14 @@ async function readDefinition(reference: string): Promise<WorkflowDefinition> {
   const input = await readStructuredInput(reference);
   const definition = asObject(input, "workflow definition") as unknown as WorkflowDefinition;
   if (!Array.isArray(definition.nodes) || !Array.isArray(definition.edges)) {
-    throw new WorkflowApplicationError("input_invalid", "Workflow nodes and edges must be arrays.");
+    throw new CliInputError("Workflow nodes and edges must be arrays.");
   }
   return definition;
 }
 
 function asObject(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new WorkflowApplicationError("input_invalid", `${name} must be an object.`);
+    throw new CliInputError(`${name} must be an object.`);
   }
   return value as Record<string, unknown>;
 }
@@ -376,10 +385,6 @@ function parseNumber(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`Expected a number, received '${value}'.`);
   return parsed;
-}
-
-function defaultDatabasePath(): string {
-  return process.env.PIWF_DATABASE ?? join(homedir(), ".pi-workflow", "piwf.db");
 }
 
 function classifyError(error: unknown): {
@@ -402,6 +407,9 @@ function classifyError(error: unknown): {
   if (error instanceof CliExit) {
     return { code: "command_failed", message: error.message, exitCode: error.exitCode, silent: true };
   }
+  if (error instanceof CliInputError) {
+    return { code: "input_invalid", message: error.message, exitCode: cliExitCodes.usage };
+  }
   if (error instanceof WorkflowApplicationError) {
     const exitCode = error.code === "workflow_not_found" || error.code === "node_not_found"
       ? cliExitCodes.notFound
@@ -413,7 +421,16 @@ function classifyError(error: unknown): {
     return { code: error.code, message: error.message, details: error.details, exitCode };
   }
   if (error instanceof OrchestratorClientError) {
-    return { code: error.code, message: error.message, details: error.details, exitCode: cliExitCodes.remote };
+    const exitCode = error.code === "workflow_not_found" || error.code === "node_not_found"
+      ? cliExitCodes.notFound
+      : error.code === "version_conflict" || error.code === "workflow_exists"
+        ? cliExitCodes.conflict
+        : error.code === "validation_failed"
+          ? cliExitCodes.validation
+          : error.code === "input_invalid" || error.code === "edge_invalid"
+            ? cliExitCodes.usage
+            : cliExitCodes.remote;
+    return { code: error.code, message: error.message, details: error.details, exitCode };
   }
   return {
     code: "internal_error",
@@ -422,36 +439,9 @@ function classifyError(error: unknown): {
   };
 }
 
-class LazyWorkflowRepository implements WorkflowRepository {
-  private repository?: SqliteWorkflowRepository;
-
-  constructor(private readonly databasePath: string) {}
-
-  async list(): Promise<WorkflowRecord[]> {
-    return (await this.getRepository()).list();
-  }
-
-  async get(workflowId: string): Promise<WorkflowRecord | undefined> {
-    return (await this.getRepository()).get(workflowId);
-  }
-
-  async save(record: WorkflowRecord, options?: WorkflowSaveOptions): Promise<void> {
-    await (await this.getRepository()).save(record, options);
-  }
-
-  async delete(workflowId: string, options?: WorkflowSaveOptions): Promise<void> {
-    await (await this.getRepository()).delete(workflowId, options);
-  }
-
-  close(): void {
-    this.repository?.close();
-  }
-
-  private async getRepository(): Promise<SqliteWorkflowRepository> {
-    if (!this.repository) {
-      const { SqliteWorkflowRepository } = await import("@pi-workflow/application-service/sqlite");
-      this.repository = new SqliteWorkflowRepository(this.databasePath);
-    }
-    return this.repository;
+class CliInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CliInputError";
   }
 }

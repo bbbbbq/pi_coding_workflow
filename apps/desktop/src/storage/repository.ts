@@ -1,10 +1,4 @@
 import Database from "@tauri-apps/plugin-sql";
-import {
-  RepositoryVersionConflictError,
-  type WorkflowRecord,
-  type WorkflowRepository,
-  type WorkflowSaveOptions,
-} from "@pi-workflow/application-service";
 import type {
   ModelProvider,
   ModelRoute,
@@ -19,21 +13,8 @@ const databaseUrl = "sqlite:pi-workflow.db";
 let databasePromise: Promise<Database> | undefined;
 let initializationPromise: Promise<void> | undefined;
 
-interface CurrentVersionRow {
-  current_version: number;
-}
-
 interface DefinitionRow {
   definition_json: string;
-}
-
-interface WorkflowRecordRow extends DefinitionRow {
-  id: string;
-  lifecycle_status: WorkflowRecord["status"];
-  created_at: string;
-  updated_at: string;
-  published_at: string | null;
-  current_version: number;
 }
 
 interface SettingRow {
@@ -115,95 +96,6 @@ interface ApprovalRow {
 export function initializePersistence(): Promise<void> {
   initializationPromise ??= getDatabase().then(() => undefined);
   return initializationPromise;
-}
-
-export class TauriWorkflowRepository implements WorkflowRepository {
-  async list(): Promise<WorkflowRecord[]> {
-    const database = await readyDatabase();
-    const rows = await database.select<WorkflowRecordRow[]>(`
-      SELECT workflows.id, workflows.current_version, workflows.lifecycle_status,
-        workflows.created_at, workflows.updated_at, workflows.published_at,
-        versions.definition_json
-      FROM workflows
-      JOIN workflow_versions AS versions
-        ON versions.workflow_id = workflows.id
-        AND versions.version = workflows.current_version
-      ORDER BY workflows.updated_at DESC
-    `);
-    return rows.flatMap(recordFromRow);
-  }
-
-  async get(workflowId: string): Promise<WorkflowRecord | undefined> {
-    const database = await readyDatabase();
-    const rows = await database.select<WorkflowRecordRow[]>(`
-      SELECT workflows.id, workflows.current_version, workflows.lifecycle_status,
-        workflows.created_at, workflows.updated_at, workflows.published_at,
-        versions.definition_json
-      FROM workflows
-      JOIN workflow_versions AS versions
-        ON versions.workflow_id = workflows.id
-        AND versions.version = workflows.current_version
-      WHERE workflows.id = $1
-    `, [workflowId]);
-    return rows.flatMap(recordFromRow)[0];
-  }
-
-  async save(record: WorkflowRecord, options: WorkflowSaveOptions = {}): Promise<void> {
-    const database = await readyDatabase();
-    await database.execute("BEGIN IMMEDIATE");
-    try {
-      const rows = await database.select<CurrentVersionRow[]>(
-        "SELECT current_version FROM workflows WHERE id = $1",
-        [record.definition.id],
-      );
-      assertStoredVersion(options.expectedVersion, rows[0]?.current_version);
-      await database.execute(`
-        INSERT INTO workflows (
-          id, name, current_version, lifecycle_status, created_at, updated_at, published_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          current_version = excluded.current_version,
-          lifecycle_status = excluded.lifecycle_status,
-          updated_at = excluded.updated_at,
-          published_at = excluded.published_at
-      `, [
-        record.definition.id,
-        record.definition.name,
-        record.definition.version,
-        record.status,
-        record.createdAt,
-        record.updatedAt,
-        record.publishedAt ?? null,
-      ]);
-      await database.execute(`
-        INSERT INTO workflow_versions (workflow_id, version, definition_json, created_at)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT(workflow_id, version) DO UPDATE SET
-          definition_json = excluded.definition_json
-      `, [
-        record.definition.id,
-        record.definition.version,
-        JSON.stringify(record.definition),
-        record.updatedAt,
-      ]);
-      await database.execute("COMMIT");
-    } catch (error) {
-      await database.execute("ROLLBACK");
-      throw error;
-    }
-  }
-
-  async delete(workflowId: string, options: WorkflowSaveOptions = {}): Promise<void> {
-    const database = await readyDatabase();
-    const rows = await database.select<CurrentVersionRow[]>(
-      "SELECT current_version FROM workflows WHERE id = $1",
-      [workflowId],
-    );
-    assertStoredVersion(options.expectedVersion, rows[0]?.current_version);
-    await database.execute("DELETE FROM schedules WHERE workflow_id = $1", [workflowId]);
-    await database.execute("DELETE FROM workflows WHERE id = $1", [workflowId]);
-  }
 }
 
 export async function getSetting(key: string): Promise<string | undefined> {
@@ -350,54 +242,6 @@ export async function getLatestWorkflowDefinition(): Promise<WorkflowDefinition 
     LIMIT 1
   `);
   return parseDefinition(rows[0]?.definition_json);
-}
-
-export async function saveWorkflowDefinition(
-  definition: WorkflowDefinition,
-): Promise<WorkflowDefinition> {
-  const database = await readyDatabase();
-  const current = await database.select<CurrentVersionRow[]>(
-    "SELECT current_version FROM workflows WHERE id = $1",
-    [definition.id],
-  );
-  const now = new Date().toISOString();
-  const version = (current[0]?.current_version ?? 0) + 1;
-  const savedDefinition = { ...definition, version, updatedAt: now };
-
-  await database.execute(`
-    INSERT INTO workflows (id, name, current_version, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $4)
-    ON CONFLICT(id) DO UPDATE SET
-      name = excluded.name,
-      current_version = excluded.current_version,
-      updated_at = excluded.updated_at
-  `, [definition.id, definition.name, version, now]);
-  await database.execute(`
-    INSERT INTO workflow_versions (workflow_id, version, definition_json, created_at)
-    VALUES ($1, $2, $3, $4)
-  `, [definition.id, version, JSON.stringify(savedDefinition), now]);
-
-  return savedDefinition;
-}
-
-export async function listWorkflowVersions(workflowId: string): Promise<WorkflowDefinition[]> {
-  const database = await readyDatabase();
-  const rows = await database.select<DefinitionRow[]>(`
-    SELECT definition_json
-    FROM workflow_versions
-    WHERE workflow_id = $1
-    ORDER BY version DESC
-  `, [workflowId]);
-  return rows.flatMap((row) => {
-    const definition = parseDefinition(row.definition_json);
-    return definition ? [definition] : [];
-  });
-}
-
-export async function deleteWorkflow(workflowId: string): Promise<void> {
-  const database = await readyDatabase();
-  await database.execute("DELETE FROM schedules WHERE workflow_id = $1", [workflowId]);
-  await database.execute("DELETE FROM workflows WHERE id = $1", [workflowId]);
 }
 
 export async function listSchedules(): Promise<WorkflowSchedule[]> {
@@ -609,26 +453,6 @@ function parseDefinition(value: string | undefined): WorkflowDefinition | undefi
     && Array.isArray(definition.edges)
     ? definition as WorkflowDefinition
     : undefined;
-}
-
-function recordFromRow(row: WorkflowRecordRow): WorkflowRecord[] {
-  const definition = parseDefinition(row.definition_json);
-  return definition
-    ? [{
-        definition,
-        status: row.lifecycle_status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        publishedAt: row.published_at ?? undefined,
-      }]
-    : [];
-}
-
-function assertStoredVersion(expected: number | null | undefined, actual: number | undefined): void {
-  if (expected === undefined) return;
-  if (expected === null ? actual !== undefined : actual !== expected) {
-    throw new RepositoryVersionConflictError(expected, actual);
-  }
 }
 
 function parseJson(value: string): unknown {

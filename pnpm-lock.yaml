@@ -99,6 +99,9 @@ importers:
 
   apps/orchestrator:
     dependencies:
+      '@pi-workflow/application-service':
+        specifier: workspace:*
+        version: link:../../packages/application-service
       '@pi-workflow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -115,6 +118,9 @@ importers:
         specifier: ^1.20.2
         version: 1.20.2
     devDependencies:
+      '@pi-workflow/workflow-core':
+        specifier: workspace:*
+        version: link:../../packages/workflow-core
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3

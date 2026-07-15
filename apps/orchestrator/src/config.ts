@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 export interface OrchestratorConfig {
   temporalAddress: string;
   temporalNamespace: string;
@@ -6,6 +9,7 @@ export interface OrchestratorConfig {
   apiPort: number;
   allowedOrigins: Set<string>;
   modelRoutingFile?: string;
+  workflowDatabasePath: string;
 }
 
 const defaultOrigins = [
@@ -23,6 +27,8 @@ export function loadOrchestratorConfig(): OrchestratorConfig {
     apiHost: process.env.PI_WORKFLOW_API_HOST ?? "127.0.0.1",
     apiPort: parsePort(process.env.PI_WORKFLOW_API_PORT),
     modelRoutingFile: process.env.PI_WORKFLOW_MODEL_ROUTING_FILE,
+    workflowDatabasePath: process.env.PI_WORKFLOW_DATABASE
+      ?? join(homedir(), ".pi-workflow", "piwf.db"),
     allowedOrigins: new Set(
       (process.env.PI_WORKFLOW_ALLOWED_ORIGINS?.split(",") ?? defaultOrigins)
         .map((origin) => origin.trim())

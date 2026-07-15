@@ -6,7 +6,17 @@ import type {
   RegisterTemporalScheduleRequest,
   StartTemporalRunRequest,
   TemporalApprovalRequest,
+  WorkflowDefinition,
 } from "@pi-workflow/contracts";
+import {
+  WorkflowApplicationError,
+  WorkflowApplicationService,
+  type AddWorkflowNodeInput,
+  type ChangeOptions,
+  type ConnectWorkflowEdgeInput,
+  type UpdateWorkflowNodeInput,
+} from "@pi-workflow/application-service";
+import { SqliteWorkflowRepository } from "@pi-workflow/application-service/sqlite";
 import { loadOrchestratorConfig, type OrchestratorConfig } from "./config.js";
 import { ModelRoutingService } from "./model-routing-service.js";
 import { TemporalService } from "./temporal-service.js";
@@ -15,9 +25,15 @@ export async function startApiServer(
   service: TemporalService,
   config: OrchestratorConfig = loadOrchestratorConfig(),
   modelRouting: ModelRoutingService = ModelRoutingService.load(config.modelRoutingFile),
+  workflowApplication?: WorkflowApplicationService,
 ): Promise<ReturnType<typeof createServer>> {
+  const ownedWorkflowRepository = workflowApplication
+    ? undefined
+    : new SqliteWorkflowRepository(config.workflowDatabasePath);
+  const workflows = workflowApplication
+    ?? new WorkflowApplicationService(ownedWorkflowRepository!);
   const server = createServer((request, response) => {
-    void handleRequest(request, response, service, modelRouting, config);
+    void handleRequest(request, response, service, modelRouting, workflows, config);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -27,13 +43,20 @@ export async function startApiServer(
       resolve();
     });
   });
-  console.log(`Pi workflow API is listening on http://${config.apiHost}:${config.apiPort}`);
+  const address = server.address();
+  const listeningPort = address && typeof address === "object" ? address.port : config.apiPort;
+  console.log(`Pi workflow API is listening on http://${config.apiHost}:${listeningPort}`);
 
   const close = () => {
     server.close();
   };
   process.once("SIGINT", close);
   process.once("SIGTERM", close);
+  server.once("close", () => {
+    ownedWorkflowRepository?.close();
+    process.removeListener("SIGINT", close);
+    process.removeListener("SIGTERM", close);
+  });
   return server;
 }
 
@@ -42,6 +65,7 @@ async function handleRequest(
   response: ServerResponse,
   service: TemporalService,
   modelRouting: ModelRoutingService,
+  workflows: WorkflowApplicationService,
   config: OrchestratorConfig,
 ): Promise<void> {
   if (!applyCors(request, response, config)) return;
@@ -57,6 +81,8 @@ async function handleRequest(
       sendJson(response, 200, await service.health());
       return;
     }
+
+    if (await handleWorkflowRequest(request, response, url, workflows)) return;
 
     if (request.method === "POST" && url.pathname === "/v1/runs") {
       const body = await readJson<StartTemporalRunRequest>(request);
@@ -162,11 +188,145 @@ async function handleRequest(
 
     sendJson(response, 404, { error: "not_found" });
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError
+      ? error.status
+      : error instanceof WorkflowApplicationError
+        ? workflowErrorStatus(error)
+        : 500;
     const message = error instanceof Error ? error.message : String(error);
     console.error(`${request.method} ${url.pathname}: ${message}`);
-    sendJson(response, status, { error: status === 500 ? "temporal_error" : "invalid_request", message });
+    sendJson(response, status, {
+      error: error instanceof WorkflowApplicationError
+        ? error.code
+        : status === 500
+          ? "temporal_error"
+          : "invalid_request",
+      message,
+      details: error instanceof WorkflowApplicationError ? error.details : undefined,
+    });
   }
+}
+
+async function handleWorkflowRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  workflows: WorkflowApplicationService,
+): Promise<boolean> {
+  if (url.pathname === "/v1/workflows") {
+    if (request.method === "GET") {
+      sendJson(response, 200, await workflows.listWorkflows());
+      return true;
+    }
+    if (request.method === "POST") {
+      const body = await readJson<{
+        definition: WorkflowDefinition;
+        options?: Pick<ChangeOptions, "dryRun">;
+      }>(request);
+      requireObject(body, "request body");
+      requireWorkflowDefinition(body.definition);
+      sendJson(response, 201, await workflows.createWorkflow(body.definition, body.options));
+      return true;
+    }
+  }
+
+  const nodeToggleMatch = url.pathname.match(
+    /^\/v1\/workflows\/([^/]+)\/nodes\/([^/]+)\/(enable|disable)$/,
+  );
+  if (request.method === "POST" && nodeToggleMatch) {
+    const body = await readJson<{ options?: ChangeOptions }>(request);
+    requireObject(body, "request body");
+    sendJson(response, 200, await workflows.setNodeEnabled(
+      decodeURIComponent(nodeToggleMatch[1]),
+      decodeURIComponent(nodeToggleMatch[2]),
+      nodeToggleMatch[3] === "enable",
+      body.options,
+    ));
+    return true;
+  }
+
+  const nodeMatch = url.pathname.match(/^\/v1\/workflows\/([^/]+)\/nodes\/([^/]+)$/);
+  if (nodeMatch) {
+    const workflowId = decodeURIComponent(nodeMatch[1]);
+    const nodeId = decodeURIComponent(nodeMatch[2]);
+    if (request.method === "PATCH") {
+      const body = await readJson<{ input: UpdateWorkflowNodeInput; options?: ChangeOptions }>(request);
+      requireObject(body, "request body");
+      requireObject(body.input, "input");
+      sendJson(response, 200, await workflows.updateNode(workflowId, nodeId, body.input, body.options));
+      return true;
+    }
+    if (request.method === "DELETE") {
+      const body = await readJson<{ options?: ChangeOptions }>(request);
+      requireObject(body, "request body");
+      sendJson(response, 200, await workflows.removeNode(workflowId, nodeId, body.options));
+      return true;
+    }
+  }
+
+  const nodesMatch = url.pathname.match(/^\/v1\/workflows\/([^/]+)\/nodes$/);
+  if (request.method === "POST" && nodesMatch) {
+    const body = await readJson<{ input: AddWorkflowNodeInput; options?: ChangeOptions }>(request);
+    requireObject(body, "request body");
+    requireObject(body.input, "input");
+    sendJson(response, 200, await workflows.addNode(
+      decodeURIComponent(nodesMatch[1]),
+      body.input,
+      body.options,
+    ));
+    return true;
+  }
+
+  const edgesMatch = url.pathname.match(/^\/v1\/workflows\/([^/]+)\/edges$/);
+  if (request.method === "POST" && edgesMatch) {
+    const body = await readJson<{ input: ConnectWorkflowEdgeInput; options?: ChangeOptions }>(request);
+    requireObject(body, "request body");
+    requireObject(body.input, "input");
+    sendJson(response, 200, await workflows.connectEdge(
+      decodeURIComponent(edgesMatch[1]),
+      body.input,
+      body.options,
+    ));
+    return true;
+  }
+
+  const actionMatch = url.pathname.match(/^\/v1\/workflows\/([^/]+)\/(validate|publish)$/);
+  if (request.method === "POST" && actionMatch) {
+    const workflowId = decodeURIComponent(actionMatch[1]);
+    if (actionMatch[2] === "validate") {
+      sendJson(response, 200, await workflows.validateWorkflow(workflowId));
+    } else {
+      const body = await readJson<{ options?: ChangeOptions }>(request);
+      requireObject(body, "request body");
+      sendJson(response, 200, await workflows.publishWorkflow(workflowId, body.options));
+    }
+    return true;
+  }
+
+  const workflowMatch = url.pathname.match(/^\/v1\/workflows\/([^/]+)$/);
+  if (workflowMatch) {
+    const workflowId = decodeURIComponent(workflowMatch[1]);
+    if (request.method === "GET") {
+      sendJson(response, 200, await workflows.getWorkflow(workflowId));
+      return true;
+    }
+    if (request.method === "PUT") {
+      const body = await readJson<{ definition: WorkflowDefinition; options?: ChangeOptions }>(request);
+      requireObject(body, "request body");
+      requireWorkflowDefinition(body.definition);
+      if (body.definition.id !== workflowId) throw badRequest("Workflow ID does not match the request path");
+      sendJson(response, 200, await workflows.applyWorkflow(body.definition, body.options));
+      return true;
+    }
+    if (request.method === "DELETE") {
+      const body = await readJson<{ options?: ChangeOptions }>(request);
+      requireObject(body, "request body");
+      sendJson(response, 200, await workflows.deleteWorkflow(workflowId, body.options));
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function applyCors(
@@ -180,7 +340,7 @@ function applyCors(
     return false;
   }
   if (origin) response.setHeader("Access-Control-Allow-Origin", origin);
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "content-type");
   response.setHeader("Vary", "Origin");
   return true;
@@ -212,8 +372,29 @@ function requireString(value: unknown, name: string): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0) throw badRequest(`${name} is required`);
 }
 
+function requireObject(value: unknown, name: string): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw badRequest(`${name} must be an object`);
+  }
+}
+
+function requireWorkflowDefinition(value: unknown): asserts value is WorkflowDefinition {
+  requireObject(value, "definition");
+  requireString(value.id, "definition.id");
+  requireString(value.name, "definition.name");
+  if (!Array.isArray(value.nodes)) throw badRequest("definition.nodes must be an array");
+  if (!Array.isArray(value.edges)) throw badRequest("definition.edges must be an array");
+}
+
 function badRequest(message: string): ApiError {
   return new ApiError(400, message);
+}
+
+function workflowErrorStatus(error: WorkflowApplicationError): number {
+  if (error.code === "workflow_not_found" || error.code === "node_not_found") return 404;
+  if (error.code === "workflow_exists" || error.code === "version_conflict") return 409;
+  if (error.code === "validation_failed") return 422;
+  return 400;
 }
 
 class ApiError extends Error {

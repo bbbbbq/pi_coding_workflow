@@ -8,7 +8,18 @@ import type {
   TemporalHealth,
   TemporalRunRef,
   TemporalScheduleRef,
+  WorkflowDefinition,
+  WorkflowValidationResult,
 } from "@pi-workflow/contracts";
+import type {
+  AddWorkflowNodeInput,
+  ChangeOptions,
+  ConnectWorkflowEdgeInput,
+  UpdateWorkflowNodeInput,
+  WorkflowChangeResult,
+  WorkflowRecord,
+  WorkflowSummary,
+} from "./index.js";
 
 export interface RemoteRunSummary {
   workflowId: string;
@@ -52,6 +63,113 @@ export class OrchestratorApplicationService {
 
   health(): Promise<TemporalHealth> {
     return this.request<TemporalHealth>("/health");
+  }
+
+  listWorkflows(): Promise<WorkflowSummary[]> {
+    return this.request<WorkflowSummary[]>("/v1/workflows");
+  }
+
+  getWorkflow(workflowId: string): Promise<WorkflowRecord> {
+    return this.request<WorkflowRecord>(`/v1/workflows/${encodeURIComponent(workflowId)}`);
+  }
+
+  createWorkflow(
+    definition: WorkflowDefinition,
+    options: Pick<ChangeOptions, "dryRun"> = {},
+  ): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>("/v1/workflows", {
+      method: "POST",
+      body: JSON.stringify({ definition, options }),
+    });
+  }
+
+  applyWorkflow(definition: WorkflowDefinition, options: ChangeOptions = {}): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(`/v1/workflows/${encodeURIComponent(definition.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ definition, options }),
+    });
+  }
+
+  validateWorkflow(workflowId: string): Promise<WorkflowValidationResult> {
+    return this.request<WorkflowValidationResult>(`/v1/workflows/${encodeURIComponent(workflowId)}/validate`, {
+      method: "POST",
+      body: "{}",
+    });
+  }
+
+  publishWorkflow(workflowId: string, options: ChangeOptions = {}): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(`/v1/workflows/${encodeURIComponent(workflowId)}/publish`, {
+      method: "POST",
+      body: JSON.stringify({ options }),
+    });
+  }
+
+  deleteWorkflow(
+    workflowId: string,
+    options: ChangeOptions = {},
+  ): Promise<{ id: string; deleted: boolean; dryRun: boolean }> {
+    return this.request(`/v1/workflows/${encodeURIComponent(workflowId)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ options }),
+    });
+  }
+
+  addNode(
+    workflowId: string,
+    input: AddWorkflowNodeInput,
+    options: ChangeOptions = {},
+  ): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(`/v1/workflows/${encodeURIComponent(workflowId)}/nodes`, {
+      method: "POST",
+      body: JSON.stringify({ input, options }),
+    });
+  }
+
+  updateNode(
+    workflowId: string,
+    nodeId: string,
+    input: UpdateWorkflowNodeInput,
+    options: ChangeOptions = {},
+  ): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(
+      `/v1/workflows/${encodeURIComponent(workflowId)}/nodes/${encodeURIComponent(nodeId)}`,
+      { method: "PATCH", body: JSON.stringify({ input, options }) },
+    );
+  }
+
+  setNodeEnabled(
+    workflowId: string,
+    nodeId: string,
+    enabled: boolean,
+    options: ChangeOptions = {},
+  ): Promise<WorkflowChangeResult> {
+    const operation = enabled ? "enable" : "disable";
+    return this.request<WorkflowChangeResult>(
+      `/v1/workflows/${encodeURIComponent(workflowId)}/nodes/${encodeURIComponent(nodeId)}/${operation}`,
+      { method: "POST", body: JSON.stringify({ options }) },
+    );
+  }
+
+  removeNode(
+    workflowId: string,
+    nodeId: string,
+    options: ChangeOptions = {},
+  ): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(
+      `/v1/workflows/${encodeURIComponent(workflowId)}/nodes/${encodeURIComponent(nodeId)}`,
+      { method: "DELETE", body: JSON.stringify({ options }) },
+    );
+  }
+
+  connectEdge(
+    workflowId: string,
+    input: ConnectWorkflowEdgeInput,
+    options: ChangeOptions = {},
+  ): Promise<WorkflowChangeResult> {
+    return this.request<WorkflowChangeResult>(`/v1/workflows/${encodeURIComponent(workflowId)}/edges`, {
+      method: "POST",
+      body: JSON.stringify({ input, options }),
+    });
   }
 
   startRun(input: StartTemporalRunRequest): Promise<TemporalRunRef> {
