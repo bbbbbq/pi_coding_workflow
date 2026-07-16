@@ -82,6 +82,13 @@ Use `node add`, `node update`, `node enable`, `node disable`, `node remove`, and
 The CLI starts the local runtime in-process; do not start a server first.
 
 - Use `run start/list/inspect/pause/resume/cancel/approve` for durable local runs.
+- Expect `run start`, `run resume`, and `run approve` to remain in the foreground until execution
+  completes, fails, or suspends for approval/external input.
+- Read `events` from the command result or `run inspect`; node progress is reported as
+  `node_started`, `node_completed`, `node_failed`, and `node_skipped`.
+- Use `run resume` to reclaim a stale `running`, paused, or interrupted Run. Node execution is
+  at-least-once after process loss, so inspect the last node event before resuming commands with
+  external side effects.
 - Use `provider list/test` and `route list/resolve` for model routing.
 - Add `--dry-run` to supported mutations before writing state.
 

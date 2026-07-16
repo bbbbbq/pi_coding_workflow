@@ -6,6 +6,7 @@ A local-first desktop workspace for durable, reviewable coding-agent workflows.
 
 - Desktop: Tauri 2 + React 19 + TypeScript + Vite
 - Local runtime: bundled Node.js process using JSON Lines over stdin/stdout
+- Graph executor: version-pinned node traversal with durable execution events
 - Coding executor: Pi SDK
 - Application layer: shared TypeScript services for Workflows and Run state
 - Persistence: SQLite with optimistic Workflow versions and append-only Run events
@@ -66,6 +67,10 @@ piwf edge connect coding-workflow trigger agent --source-port started --target-p
 piwf run start coding-workflow --input '{ repositoryPath: "/code/project", task: "Fix tests" }' --json
 ```
 
+`piwf run start`, `run resume`, and `run approve` stay in the foreground until the Run reaches a
+terminal or suspended state. Desktop uses the same executor in the resident sidecar and refreshes
+Run and node events while work is active.
+
 Successful business output is written to stdout and diagnostics to stderr. Stable exit codes are
 `0` success, `1` unexpected failure, `2` usage/input, `3` not found, `4` validation, `5` state or
 version conflict, and `6` runtime failure.
@@ -88,16 +93,20 @@ Implemented:
 - Idempotent Workflow apply, publication, dry-run, and optimistic version checks
 - Shared Desktop/CLI local runtime with no network transport
 - Durable Run state machine with ordered events, pause/resume/interruption, and approval gates
+- Version-pinned graph execution with resumable node snapshots and a bounded execution count
+- Pi Agent, shell action, condition, loop, delay, human approval, wait, subworkflow, and End execution
+- Node-level started/completed/failed/skipped events and persisted terminal outputs
 - SQLite persistence for Workflows, Runs, events, and approvals
 - Pi model routing and provider health checks
 - Local schedule definition management in Desktop
 
-Not yet implemented:
+Current execution boundaries:
 
-- Graph interpretation that executes every visual node type
-- Connecting `run start` to the Pi coding executor and validation loop
+- Parallel fan-out is executed as deterministic sequential branches; isolated concurrent joins are not implemented
+- Webhook and external-event wake-up endpoints are not implemented; those wait nodes interrupt explicitly
 - OS scheduler integration for running schedules while Desktop is closed
 - Target-specific bundling of the Node runtime executable
 
-Without a resident process, active Agent work cannot continue after both Desktop and CLI exit. Stored
-Runs can be marked interrupted and resumed on a later launch.
+Without a resident process, active Agent work cannot continue after both Desktop and CLI exit. A
+stale `running` Run can be reclaimed with `piwf run resume`; execution restarts from its last durable
+node snapshot, and an in-flight node may execute again.
