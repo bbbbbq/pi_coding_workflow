@@ -40,6 +40,7 @@ export interface WorkflowSaveOptions {
 export interface WorkflowRepository {
   list(): Promise<WorkflowRecord[]>;
   get(workflowId: string): Promise<WorkflowRecord | undefined>;
+  getVersion(workflowId: string, version: number): Promise<WorkflowDefinition | undefined>;
   save(record: WorkflowRecord, options?: WorkflowSaveOptions): Promise<void>;
   delete(workflowId: string, options?: WorkflowSaveOptions): Promise<void>;
 }
@@ -56,6 +57,7 @@ export class RepositoryVersionConflictError extends Error {
 
 export type WorkflowApplicationErrorCode =
   | "workflow_not_found"
+  | "workflow_version_not_found"
   | "workflow_exists"
   | "version_conflict"
   | "validation_failed"
@@ -138,6 +140,20 @@ export class WorkflowApplicationService {
       throw new WorkflowApplicationError("workflow_not_found", `Workflow '${workflowId}' was not found.`);
     }
     return cloneRecord(record);
+  }
+
+  async getWorkflowVersion(workflowId: string, version: number): Promise<WorkflowDefinition> {
+    if (!Number.isInteger(version) || version < 1) {
+      throw new WorkflowApplicationError("input_invalid", "Workflow version must be a positive integer.");
+    }
+    const definition = await this.repository.getVersion(workflowId, version);
+    if (!definition) {
+      throw new WorkflowApplicationError(
+        "workflow_version_not_found",
+        `Workflow '${workflowId}' version ${version} was not found.`,
+      );
+    }
+    return structuredClone(definition);
   }
 
   async createWorkflow(
@@ -372,9 +388,13 @@ export class WorkflowApplicationService {
 
 export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly records = new Map<string, WorkflowRecord>();
+  private readonly versions = new Map<string, Map<number, WorkflowDefinition>>();
 
   constructor(records: WorkflowRecord[] = []) {
-    for (const record of records) this.records.set(record.definition.id, cloneRecord(record));
+    for (const record of records) {
+      this.records.set(record.definition.id, cloneRecord(record));
+      this.storeVersion(record.definition);
+    }
   }
 
   async list(): Promise<WorkflowRecord[]> {
@@ -388,16 +408,29 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
     return record ? cloneRecord(record) : undefined;
   }
 
+  async getVersion(workflowId: string, version: number): Promise<WorkflowDefinition | undefined> {
+    const definition = this.versions.get(workflowId)?.get(version);
+    return definition ? structuredClone(definition) : undefined;
+  }
+
   async save(record: WorkflowRecord, options: WorkflowSaveOptions = {}): Promise<void> {
     const existing = this.records.get(record.definition.id);
     assertRepositoryVersion(options.expectedVersion, existing?.definition.version);
     this.records.set(record.definition.id, cloneRecord(record));
+    this.storeVersion(record.definition);
   }
 
   async delete(workflowId: string, options: WorkflowSaveOptions = {}): Promise<void> {
     const existing = this.records.get(workflowId);
     assertRepositoryVersion(options.expectedVersion, existing?.definition.version);
     this.records.delete(workflowId);
+    this.versions.delete(workflowId);
+  }
+
+  private storeVersion(definition: WorkflowDefinition): void {
+    const versions = this.versions.get(definition.id) ?? new Map<number, WorkflowDefinition>();
+    versions.set(definition.version, structuredClone(definition));
+    this.versions.set(definition.id, versions);
   }
 }
 

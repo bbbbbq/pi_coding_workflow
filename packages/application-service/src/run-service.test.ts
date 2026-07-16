@@ -46,6 +46,33 @@ test("approval decision is committed with the next run state", async () => {
   assert.equal(decided.approval?.status, "approved");
 });
 
+test("rejected approvals resume through the workflow rejected edge", async () => {
+  const service = new RunApplicationService(new InMemoryRunStateRepository());
+  await service.createRun({ id: "RUN-REJECT", workflowId: "workflow", workflowVersion: 1, title: "Approval", repository: "/repo" });
+  await service.startRun("RUN-REJECT");
+  await service.requestApproval("RUN-REJECT", { id: "APPROVAL-REJECT", nodeId: "human", title: "Review" });
+  const decided = await service.decideApproval("RUN-REJECT", "APPROVAL-REJECT", { approved: false });
+  assert.equal(decided.run.status, "queued");
+  assert.equal(decided.approval?.status, "rejected");
+});
+
+test("node events and terminal results are persisted on the Run", async () => {
+  const service = new RunApplicationService(new InMemoryRunStateRepository());
+  await service.createRun({ id: "RUN-NODE", workflowId: "workflow", workflowVersion: 1, title: "Node events", repository: "/repo" });
+  await service.startRun("RUN-NODE");
+  await service.recordNodeEvent("RUN-NODE", "node_started", "agent", { attempt: 1 });
+  await service.recordNodeEvent("RUN-NODE", "node_completed", "agent", { output: "done" });
+  const completed = await service.completeRun("RUN-NODE", { output: "done" });
+  assert.deepEqual(completed.run.result, { output: "done" });
+  assert.deepEqual((await service.listEvents("RUN-NODE")).map((event) => event.type), [
+    "run_created",
+    "run_started",
+    "node_started",
+    "node_completed",
+    "run_completed",
+  ]);
+});
+
 test("invalid terminal transitions are rejected", async () => {
   const service = new RunApplicationService(new InMemoryRunStateRepository());
   await service.createRun({ id: "RUN-3", workflowId: "workflow", workflowVersion: 1, title: "Terminal", repository: "/repo" });

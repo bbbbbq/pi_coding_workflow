@@ -7,6 +7,7 @@ import {
   type WorkflowRepository,
   type WorkflowSaveOptions,
 } from "./index.js";
+import type { WorkflowDefinition } from "@pi-workflow/contracts";
 
 interface WorkflowRow {
   id: string;
@@ -61,6 +62,14 @@ export class SqliteWorkflowRepository implements WorkflowRepository, Disposable 
       SELECT * FROM application_workflows WHERE id = ?
     `).get(workflowId) as unknown as WorkflowRow | undefined;
     return row ? fromRow(row) : undefined;
+  }
+
+  async getVersion(workflowId: string, version: number): Promise<WorkflowDefinition | undefined> {
+    const row = this.database.prepare(`
+      SELECT definition_json FROM application_workflow_versions
+      WHERE workflow_id = ? AND version = ?
+    `).get(workflowId, version) as { definition_json: string } | undefined;
+    return row ? JSON.parse(row.definition_json) as WorkflowDefinition : undefined;
   }
 
   async save(record: WorkflowRecord, options: WorkflowSaveOptions = {}): Promise<void> {

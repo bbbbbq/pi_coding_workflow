@@ -35,6 +35,8 @@ test("apply is idempotent and uses optimistic workflow versions", async () => {
   changedDefinition.name = "Coding updated";
   const updated = await service.applyWorkflow(changedDefinition, { ifVersion: 1 });
   assert.equal(updated.workflow.definition.version, 2);
+  assert.equal((await service.getWorkflowVersion("coding", 1)).name, "Coding");
+  assert.equal((await service.getWorkflowVersion("coding", 2)).name, "Coding updated");
 
   await assert.rejects(
     service.applyWorkflow(workflow(), { ifVersion: 1 }),

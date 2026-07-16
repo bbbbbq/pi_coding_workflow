@@ -81,6 +81,11 @@ export interface RunApplicationServiceOptions {
   idFactory?: () => string;
 }
 
+export type WorkflowNodeRunEventType = Extract<
+  WorkflowRunEventType,
+  "node_started" | "node_completed" | "node_failed" | "node_skipped"
+>;
+
 export class RunApplicationService {
   private readonly now: () => string;
   private readonly idFactory: () => string;
@@ -153,15 +158,37 @@ export class RunApplicationService {
   }
 
   completeRun(runId: string, payload?: unknown): Promise<RunStateCommitResult> {
-    return this.transition(runId, "completed", "run_completed", { payload });
+    return this.transition(runId, "completed", "run_completed", { payload, result: payload });
   }
 
   failRun(runId: string, payload?: unknown): Promise<RunStateCommitResult> {
-    return this.transition(runId, "failed", "run_failed", { payload });
+    return this.transition(runId, "failed", "run_failed", { payload, result: payload });
   }
 
   cancelRun(runId: string, payload?: unknown): Promise<RunStateCommitResult> {
-    return this.transition(runId, "cancelled", "run_cancelled", { payload });
+    return this.transition(runId, "cancelled", "run_cancelled", { payload, result: payload });
+  }
+
+  async recordNodeEvent(
+    runId: string,
+    type: WorkflowNodeRunEventType,
+    nodeId: string,
+    payload?: unknown,
+  ): Promise<RunStateCommitResult> {
+    const current = await this.getRun(runId);
+    if (current.status !== "running") {
+      throw new RunApplicationError(
+        "run_transition_invalid",
+        `Node events cannot be recorded while Run is '${current.status}'.`,
+        { runId, nodeId, status: current.status },
+      );
+    }
+    const now = this.now();
+    return this.commit({
+      run: { ...current, updatedAt: now },
+      expectedStatus: current.status,
+      event: event(this.idFactory(), runId, type, current.status, current.status, now, nodeId, payload),
+    });
   }
 
   async requestApproval(
@@ -203,7 +230,7 @@ export class RunApplicationService {
     if (approval.status !== "pending") {
       throw new RunApplicationError("approval_already_decided", `Approval '${approvalId}' is already decided.`);
     }
-    const target = decision.approved ? "queued" : "cancelled";
+    const target = "queued";
     assertTransition(current.status, target);
     const now = this.now();
     const updatedApproval: WorkflowApproval = {
@@ -228,13 +255,13 @@ export class RunApplicationService {
     runId: string,
     target: WorkflowRunStatus,
     type: WorkflowRunEventType,
-    options: { payload?: unknown } = {},
+    options: { payload?: unknown; result?: unknown } = {},
   ): Promise<RunStateCommitResult> {
     const current = await this.getRun(runId);
     assertTransition(current.status, target);
     const now = this.now();
     return this.commit({
-      run: updateRun(current, target, now),
+      run: updateRun(current, target, now, options.result),
       expectedStatus: current.status,
       event: event(
         this.idFactory(), runId, type, current.status, target, now,
@@ -332,12 +359,14 @@ function updateRun(
   run: WorkflowRunRecord,
   status: WorkflowRunStatus,
   updatedAt: string,
+  result?: unknown,
 ): WorkflowRunRecord {
   return {
     ...run,
     status,
     updatedAt,
     completedAt: ["completed", "failed", "cancelled"].includes(status) ? updatedAt : undefined,
+    ...(result === undefined ? {} : { result }),
   };
 }
 

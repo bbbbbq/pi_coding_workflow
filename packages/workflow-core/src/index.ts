@@ -182,6 +182,9 @@ export function validateWorkflowDefinition(
         issues.push({ severity: "warning", code: "unreachable_node", message: "Node is not reachable from the Trigger.", nodeId: node.id });
       }
     }
+    if (!definition.nodes.some((node) => node.type === "end" && reachable.has(node.id))) {
+      issues.push({ severity: "error", code: "no_reachable_end", message: "The Trigger must be able to reach an End node." });
+    }
   }
 
   for (const node of definition.nodes) {
@@ -191,7 +194,17 @@ export function validateWorkflowDefinition(
       issues.push({ severity: "warning", code: "missing_incoming", message: "Node has no incoming connection.", nodeId: node.id });
     }
     if (node.type !== "end" && !hasOutgoing) {
-      issues.push({ severity: "warning", code: "missing_outgoing", message: "Node has no outgoing connection.", nodeId: node.id });
+      issues.push({ severity: "error", code: "missing_outgoing", message: "Node has no outgoing connection.", nodeId: node.id });
+    }
+    for (const output of requiredOutputPorts(node.type)) {
+      if (!definition.edges.some((edge) => edge.sourceNodeId === node.id && edge.sourcePort === output)) {
+        issues.push({
+          severity: "error",
+          code: "missing_output_connection",
+          message: `Node output '${output}' must be connected.`,
+          nodeId: node.id,
+        });
+      }
     }
   }
 
@@ -199,6 +212,22 @@ export function validateWorkflowDefinition(
     valid: !issues.some((issue) => issue.severity === "error"),
     issues,
   };
+}
+
+function requiredOutputPorts(type: WorkflowNodeType): string[] {
+  switch (type) {
+    case "trigger": return ["started"];
+    case "pi-agent": return ["completed"];
+    case "action": return ["success"];
+    case "condition": return ["true", "false"];
+    case "loop": return ["continue", "exhausted"];
+    case "parallel": return ["completed"];
+    case "human": return ["approved", "rejected"];
+    case "delay": return ["completed"];
+    case "wait-event": return ["completed"];
+    case "subworkflow": return ["completed"];
+    case "end": return [];
+  }
 }
 
 function collectReachableNodes(startNodeId: string, edges: WorkflowEdge[]): Set<string> {

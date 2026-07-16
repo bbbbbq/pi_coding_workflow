@@ -15,13 +15,18 @@ test("SQLite repository persists workflow versions across connections", async ()
     const firstRepository = new SqliteWorkflowRepository(databasePath);
     const firstService = new WorkflowApplicationService(firstRepository);
     await firstService.createWorkflow(validWorkflow());
+    const updated = validWorkflow();
+    updated.name = "SQLite test updated";
+    await firstService.applyWorkflow(updated, { ifVersion: 1 });
     firstRepository.close();
 
     const secondRepository = new SqliteWorkflowRepository(databasePath);
     const secondService = new WorkflowApplicationService(secondRepository);
     const stored = await secondService.getWorkflow("sqlite-test");
-    assert.equal(stored.definition.version, 1);
-    assert.equal(stored.definition.name, "SQLite test");
+    assert.equal(stored.definition.version, 2);
+    assert.equal(stored.definition.name, "SQLite test updated");
+    assert.equal((await secondService.getWorkflowVersion("sqlite-test", 1)).name, "SQLite test");
+    assert.equal((await secondService.getWorkflowVersion("sqlite-test", 2)).name, "SQLite test updated");
     secondRepository.close();
   } finally {
     await rm(directory, { recursive: true, force: true });

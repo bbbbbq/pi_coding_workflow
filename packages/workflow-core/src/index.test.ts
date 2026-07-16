@@ -29,13 +29,15 @@ function createElevenNodeWorkflow(): WorkflowDefinition {
     name: type,
     position: { x: index * 200, y: 0 },
   }));
-  const edges = nodes.slice(0, -1).map((node, index) => ({
-    id: `edge-${index}`,
-    sourceNodeId: node.id,
-    sourcePort: workflowNodePorts[node.type].outputs[0],
-    targetNodeId: nodes[index + 1].id,
-    targetPort: workflowNodePorts[nodes[index + 1].type].inputs[0],
-  }));
+  const edges = nodes.slice(0, -1).flatMap((node, index) => (
+    workflowNodePorts[node.type].outputs.map((sourcePort) => ({
+      id: `edge-${index}-${sourcePort}`,
+      sourceNodeId: node.id,
+      sourcePort,
+      targetNodeId: nodes[index + 1].id,
+      targetPort: workflowNodePorts[nodes[index + 1].type].inputs[0],
+    }))
+  ));
 
   return {
     id: "test-workflow",
@@ -68,6 +70,19 @@ test("rejects an unbounded loop configuration", () => {
   const result = validateWorkflowDefinition(workflow);
   assert.equal(result.valid, false);
   assert.ok(result.issues.some((issue) => issue.code === "loop_limit"));
+});
+
+test("rejects missing deterministic branch connections", () => {
+  const workflow = createElevenNodeWorkflow();
+  const condition = workflow.nodes.find((node) => node.type === "condition");
+  workflow.edges = workflow.edges.filter(
+    (edge) => edge.sourceNodeId !== condition?.id || edge.sourcePort !== "false",
+  );
+  const result = validateWorkflowDefinition(workflow);
+  assert.equal(result.valid, false);
+  assert.ok(result.issues.some(
+    (issue) => issue.code === "missing_output_connection" && issue.nodeId === condition?.id,
+  ));
 });
 
 test("converts delay units and rejects non-positive durations", () => {
