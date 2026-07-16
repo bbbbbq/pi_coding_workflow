@@ -242,9 +242,17 @@ function addRunCommands(program: Command, context: CliContext): void {
         repository,
         task,
       };
-      if (globalOptions(command).dryRun) return output({ dryRun: true, request }, command);
-      await context.runtime.runs.createRun(request);
-      output(await context.runtime.runs.startRun(request.id), command);
+      if (globalOptions(command).dryRun) {
+        const validation = await context.workflows.validateWorkflow(workflowId);
+        output({ dryRun: true, request, validation }, command);
+        if (!validation.valid) throw new CliExit(cliExitCodes.validation);
+        return;
+      }
+      await context.runtime.execution.createRun(request);
+      await context.runtime.execution.startRun(request.id, { background: false });
+      const inspection = await runInspection(context.runtime, request.id);
+      output(inspection, command);
+      assertExecutionSucceeded(inspection.run);
     });
 
   run.command("list").action(async (_options, command) => {
@@ -262,12 +270,16 @@ function addRunCommands(program: Command, context: CliContext): void {
   for (const operation of ["pause", "resume", "cancel"] as const) {
     run.command(`${operation} <run-id>`).action(async (runId: string, _options, command) => {
       if (globalOptions(command).dryRun) return output({ dryRun: true, runId, operation }, command);
-      const result = operation === "pause"
-        ? await context.runtime.runs.pauseRun(runId)
-        : operation === "resume"
-          ? await context.runtime.runs.resumeRun(runId)
-          : await context.runtime.runs.cancelRun(runId);
-      output(result, command);
+      if (operation === "resume") {
+        await context.runtime.execution.resumeRun(runId, { background: false });
+        const inspection = await runInspection(context.runtime, runId);
+        output(inspection, command);
+        assertExecutionSucceeded(inspection.run);
+        return;
+      }
+      output(operation === "pause"
+        ? await context.runtime.execution.pauseRun(runId)
+        : await context.runtime.execution.cancelRun(runId), command);
     });
   }
 
@@ -282,8 +294,30 @@ function addRunCommands(program: Command, context: CliContext): void {
         ?? approvals.find((approval) => approval.status === "pending")?.id;
       if (!approvalId) throw new CliInputError(`Run '${runId}' has no pending approval.`);
       if (globalOptions(command).dryRun) return output({ dryRun: true, runId, approvalId, decision }, command);
-      output(await context.runtime.runs.decideApproval(runId, approvalId, decision), command);
+      await context.runtime.execution.decideApproval(
+        runId,
+        approvalId,
+        decision,
+        { background: false },
+      );
+      const inspection = await runInspection(context.runtime, runId);
+      output(inspection, command);
+      assertExecutionSucceeded(inspection.run);
     });
+}
+
+async function runInspection(runtime: LocalRuntime, runId: string) {
+  return {
+    run: await runtime.runs.getRun(runId),
+    events: await runtime.runs.listEvents(runId),
+    approvals: await runtime.runs.listApprovals(runId),
+  };
+}
+
+function assertExecutionSucceeded(run: { status: string }): void {
+  if (["failed", "cancelled", "interrupted"].includes(run.status)) {
+    throw new CliExit(cliExitCodes.runtime);
+  }
 }
 
 function addModelCommands(program: Command, context: CliContext): void {
@@ -373,7 +407,9 @@ function classifyError(error: unknown): {
     return { code: "input_invalid", message: error.message, exitCode: cliExitCodes.usage };
   }
   if (error instanceof WorkflowApplicationError) {
-    const exitCode = error.code === "workflow_not_found" || error.code === "node_not_found"
+    const exitCode = error.code === "workflow_not_found"
+      || error.code === "workflow_version_not_found"
+      || error.code === "node_not_found"
       ? cliExitCodes.notFound
       : error.code === "version_conflict" || error.code === "workflow_exists"
         ? cliExitCodes.conflict

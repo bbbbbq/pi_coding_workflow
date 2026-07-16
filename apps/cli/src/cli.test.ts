@@ -140,8 +140,28 @@ test("CLI run commands use the same in-process local runtime", async () => {
     const runId = JSON.parse(started.stdout).run.id as string;
     const inspected = await runCli(["--json", "run", "inspect", runId], runtime);
     assert.equal(inspected.status, 0, inspected.stderr);
-    assert.equal(JSON.parse(inspected.stdout).run.status, "running");
-    assert.equal(JSON.parse(inspected.stdout).events.length, 2);
+    assert.equal(JSON.parse(started.stdout).run.status, "completed");
+    assert.equal(JSON.parse(inspected.stdout).run.status, "completed");
+    assert.equal(JSON.parse(inspected.stdout).events.length, 7);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("CLI run start returns the stable runtime exit code for a failed graph", async () => {
+  const runtime = createService();
+  const fixture = await createFixture("Failed run");
+  try {
+    await writeFile(fixture.file, JSON.stringify(workflowDefinition("Failed run", "failed")), "utf8");
+    assert.equal((await runCli([
+      "--json", "workflow", "create", "--file", fixture.file,
+    ], runtime)).status, 0);
+    const result = await runCli([
+      "--json", "run", "start", "cli-workflow",
+      "--input", "{ repositoryPath: '/repo', task: 'Fail deliberately' }",
+    ], runtime);
+    assert.equal(result.status, 6);
+    assert.equal(JSON.parse(result.stdout).run.status, "failed");
   } finally {
     await fixture.cleanup();
   }
@@ -188,7 +208,7 @@ async function runCli(
   }
 }
 
-function workflowDefinition(name: string): Record<string, unknown> {
+function workflowDefinition(name: string, result = "success"): Record<string, unknown> {
   return {
     id: "cli-workflow",
     name,
@@ -211,7 +231,7 @@ function workflowDefinition(name: string): Record<string, unknown> {
         enabled: true,
         version: 1,
         position: { x: 200, y: 0 },
-        config: { result: "success" },
+        config: { result },
       },
     ],
     edges: [
