@@ -36,6 +36,10 @@ export class ModelRoutingService {
     return structuredClone(this.config.routes);
   }
 
+  getConfig(): ModelRoutingConfig {
+    return structuredClone(this.config);
+  }
+
   resolveRoute(routeId: string): { routeId: string; providerId: string; modelId: string } {
     const selection = this.router.resolve({ routeId });
     return {

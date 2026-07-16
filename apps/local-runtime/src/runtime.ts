@@ -16,6 +16,11 @@ import { SqliteWorkflowRepository } from "@pi-workflow/application-service/sqlit
 import type { ApprovalDecision, WorkflowDefinition } from "@pi-workflow/contracts";
 import { loadLocalRuntimeConfig, type LocalRuntimeConfig } from "./config.js";
 import { ModelRoutingService } from "./model-routing-service.js";
+import {
+  WorkflowExecutionCoordinator,
+  WorkflowExecutionError,
+  type WorkflowExecutionCoordinatorOptions,
+} from "./workflow-executor.js";
 import type {
   LocalRuntimeErrorPayload,
   LocalRuntimeRequest,
@@ -27,16 +32,23 @@ export class LocalRuntime implements Disposable {
     readonly workflows: WorkflowApplicationService,
     readonly runs: RunApplicationService,
     readonly modelRouting: ModelRoutingService,
+    readonly execution: WorkflowExecutionCoordinator,
     private readonly closeDatabases?: () => void,
   ) {}
 
   static open(config: LocalRuntimeConfig = loadLocalRuntimeConfig()): LocalRuntime {
     const repository = new SqliteWorkflowRepository(config.workflowDatabasePath);
     const runRepository = new SqliteRunStateRepository(config.workflowDatabasePath);
+    const workflows = new WorkflowApplicationService(repository);
+    const runs = new RunApplicationService(runRepository);
+    const modelRouting = ModelRoutingService.load(config.modelRoutingFile);
     return new LocalRuntime(
-      new WorkflowApplicationService(repository),
-      new RunApplicationService(runRepository),
-      ModelRoutingService.load(config.modelRoutingFile),
+      workflows,
+      runs,
+      modelRouting,
+      new WorkflowExecutionCoordinator(workflows, runs, {
+        modelRouting: () => modelRouting.getConfig(),
+      }),
       () => {
         runRepository.close();
         repository.close();
@@ -48,8 +60,17 @@ export class LocalRuntime implements Disposable {
     workflows: WorkflowApplicationService,
     runs = new RunApplicationService(new InMemoryRunStateRepository()),
     modelRouting = new ModelRoutingService({ providers: [], routes: [] }),
+    executionOptions: WorkflowExecutionCoordinatorOptions = {},
   ): LocalRuntime {
-    return new LocalRuntime(workflows, runs, modelRouting);
+    return new LocalRuntime(
+      workflows,
+      runs,
+      modelRouting,
+      new WorkflowExecutionCoordinator(workflows, runs, {
+        modelRouting: () => modelRouting.getConfig(),
+        ...executionOptions,
+      }),
+    );
   }
 
   async request(request: LocalRuntimeRequest): Promise<LocalRuntimeResponse> {
@@ -120,19 +141,19 @@ export class LocalRuntime implements Disposable {
       case "run.events":
         return this.runs.listEvents(requiredString(params.runId, "runId"));
       case "run.create":
-        return this.runs.createRun(
+        return this.execution.createRun(
           requiredObject(params.input, "input") as unknown as CreateRunInput,
         );
       case "run.start":
-        return this.runs.startRun(requiredString(params.runId, "runId"));
+        return this.execution.startRun(requiredString(params.runId, "runId"));
       case "run.pause":
-        return this.runs.pauseRun(requiredString(params.runId, "runId"));
+        return this.execution.pauseRun(requiredString(params.runId, "runId"));
       case "run.resume":
-        return this.runs.resumeRun(requiredString(params.runId, "runId"));
+        return this.execution.resumeRun(requiredString(params.runId, "runId"));
       case "run.cancel":
-        return this.runs.cancelRun(requiredString(params.runId, "runId"), params.payload);
+        return this.execution.cancelRun(requiredString(params.runId, "runId"), params.payload);
       case "run.interrupt":
-        return this.runs.interruptRun(requiredString(params.runId, "runId"), params.payload);
+        return this.execution.interruptRun(requiredString(params.runId, "runId"), params.payload);
       case "run.complete":
         return this.runs.completeRun(requiredString(params.runId, "runId"), params.payload);
       case "run.fail":
@@ -145,7 +166,7 @@ export class LocalRuntime implements Disposable {
           requiredObject(params.input, "input") as unknown as RequestRunApprovalInput,
         );
       case "approval.decide":
-        return this.runs.decideApproval(
+        return this.execution.decideApproval(
           requiredString(params.runId, "runId"),
           requiredString(params.approvalId, "approvalId"),
           requiredObject(params.decision, "decision") as unknown as ApprovalDecision,
@@ -162,6 +183,7 @@ export class LocalRuntime implements Disposable {
   }
 
   close(): void {
+    this.execution.abortAll();
     this.closeDatabases?.();
   }
 
@@ -205,6 +227,9 @@ function runtimeError(error: unknown): LocalRuntimeErrorPayload {
     return { code: error.code, message: error.message, details: error.details };
   }
   if (error instanceof RunApplicationError) {
+    return { code: error.code, message: error.message, details: error.details };
+  }
+  if (error instanceof WorkflowExecutionError) {
     return { code: error.code, message: error.message, details: error.details };
   }
   if (error instanceof LocalRuntimeInputError) {

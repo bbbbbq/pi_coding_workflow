@@ -17,10 +17,12 @@
   "dependencies": {
     "@pi-workflow/application-service": "workspace:*",
     "@pi-workflow/contracts": "workspace:*",
-    "@pi-workflow/pi-adapter": "workspace:*"
+    "@pi-workflow/pi-adapter": "workspace:*",
+    "jexl": "^2.3.0"
   },
   "devDependencies": {
     "@pi-workflow/workflow-core": "workspace:*",
+    "@types/jexl": "^2.3.4",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.1",
     "tsx": "^4.20.3",

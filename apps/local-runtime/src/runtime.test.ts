@@ -35,13 +35,19 @@ test("local runtime exposes durable run state commands", async () => {
   const runtime = LocalRuntime.createForTesting(
     new WorkflowApplicationService(new InMemoryWorkflowRepository()),
   );
+  const workflow = await runtime.request({
+    id: "run-workflow-create",
+    method: "workflow.create",
+    params: { definition: workflowDefinition() },
+  });
+  assert.equal(workflow.ok, true);
   const created = await runtime.request({
     id: "run-create",
     method: "run.create",
     params: {
       input: {
         id: "RUN-LOCAL",
-        workflowId: "workflow",
+        workflowId: "local-runtime-test",
         workflowVersion: 1,
         title: "Local run",
         repository: "/repo",
@@ -56,6 +62,17 @@ test("local runtime exposes durable run state commands", async () => {
   });
   assert.equal(started.ok, true);
   if (started.ok) assert.equal((started.result as { run: { status: string } }).run.status, "running");
+  const final = await runtime.execution.waitForRun("RUN-LOCAL");
+  assert.equal(final.status, "completed");
+  assert.deepEqual((await runtime.runs.listEvents(final.id)).map((event) => event.type), [
+    "run_created",
+    "run_started",
+    "node_started",
+    "node_completed",
+    "node_started",
+    "node_completed",
+    "run_completed",
+  ]);
 });
 
 function workflowDefinition(): Record<string, unknown> {
