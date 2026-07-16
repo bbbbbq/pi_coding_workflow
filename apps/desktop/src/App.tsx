@@ -111,6 +111,35 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (runtimeAvailable === false) return;
+    let cancelled = false;
+    const refresh = () => {
+      void desktopRuntime.listRuns()
+        .then((runs) => {
+          if (!cancelled) setPersistedRuns(runs);
+        })
+        .catch((error) => console.error("Failed to refresh Runs", error));
+    };
+    const timer = window.setInterval(refresh, 1_500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [runtimeAvailable]);
+
+  const inspectRun = useCallback(async (runId: string) => {
+    const [events, approvals] = await Promise.all([
+      desktopRuntime.listRunEvents(runId),
+      desktopRuntime.listApprovals(runId),
+    ]);
+    return { events, approvals };
+  }, []);
+
+  const decideRunApproval = useCallback(async (runId: string, approvalId: string, approved: boolean) => {
+    await desktopRuntime.decideApproval(runId, approvalId, { approved });
+  }, []);
+
   const persistWorkflow = useCallback(async (definition: WorkflowDefinition) => {
     const saved = (await workflowApplication.applyWorkflow(definition, {
       ifVersion: currentWorkflow.version,
@@ -276,6 +305,8 @@ function App() {
         )}
         {activeView === "runs" && (
           <OperationsDashboard
+            onDecideApproval={decideRunApproval}
+            onInspectRun={inspectRun}
             onStartRun={startManualWorkflow}
             persistedRuns={persistedRuns}
           />

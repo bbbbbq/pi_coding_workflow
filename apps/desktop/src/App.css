@@ -400,6 +400,9 @@ textarea:focus {
   cursor: pointer;
   box-shadow: none;
   transition: background 140ms ease, transform 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .launch-button:hover {
@@ -421,6 +424,28 @@ textarea:focus {
 
 .status-pill.review {
   color: var(--copper);
+}
+
+.status-pill.waiting_for_approval,
+.status-pill.paused,
+.status-pill.interrupted,
+.status-pill.queued {
+  color: var(--copper);
+  border-color: #ead1bd;
+  background: #fff7f0;
+}
+
+.status-pill.completed {
+  color: var(--acid);
+  border-color: #c8dfd0;
+  background: var(--acid-soft);
+}
+
+.status-pill.failed,
+.status-pill.cancelled {
+  color: var(--danger);
+  border-color: #e8c6c6;
+  background: #fff7f7;
 }
 
 .workflow-list {
@@ -463,6 +488,23 @@ textarea:focus {
   color: var(--acid);
 }
 
+.workflow-list li.failed {
+  color: var(--danger);
+}
+
+.run-event-list {
+  max-height: 330px;
+  overflow: auto;
+}
+
+.run-event-list .step-state {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+}
+
 .step-number,
 .step-state {
   font-size: 10px;
@@ -491,6 +533,57 @@ textarea:focus {
   letter-spacing: 0;
 }
 
+.approval-box {
+  margin-top: 24px;
+  padding: 15px;
+  display: grid;
+  gap: 10px;
+  border-left: 2px solid var(--copper);
+  background: #fff7f0;
+}
+
+.approval-box > span {
+  color: var(--copper);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.approval-box > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.approval-box > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.approval-box button {
+  min-height: 34px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.approval-box button.approve {
+  border-color: var(--acid);
+  background: var(--acid);
+  color: #ffffff;
+}
+
+.approval-box button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .runs-panel {
   margin-top: 18px;
   padding: 28px;
@@ -514,6 +607,14 @@ textarea:focus {
 
 .run-table {
   border-bottom: 1px solid var(--line);
+}
+
+.run-empty {
+  margin: 0;
+  padding: 26px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .run-row {
@@ -568,19 +669,25 @@ textarea:focus {
   font-size: 11px;
 }
 
-.run-status.running {
+.run-status.running,
+.run-status.completed {
   color: var(--acid);
   border-color: #c8dfd0;
   background: var(--acid-soft);
 }
 
-.run-status.review {
+.run-status.review,
+.run-status.waiting_for_approval,
+.run-status.paused,
+.run-status.interrupted,
+.run-status.queued {
   color: var(--copper);
   border-color: #ead1bd;
   background: #fff7f0;
 }
 
-.run-status.failed {
+.run-status.failed,
+.run-status.cancelled {
   color: var(--danger);
   border-color: #e8c6c6;
   background: #fff7f7;
@@ -598,10 +705,15 @@ textarea:focus {
 
 @media (max-width: 720px) {
   .app-shell {
+    width: 100vw;
+    max-width: 100vw;
     grid-template-columns: 1fr;
+    overflow: hidden;
   }
 
   .rail {
+    width: 100%;
+    min-width: 0;
     position: static;
     height: 58px;
     flex-direction: row;
@@ -625,7 +737,24 @@ textarea:focus {
   }
 
   .workspace {
+    width: 100%;
+    min-width: 0;
     padding: 18px 14px 36px;
+  }
+
+  .command-grid,
+  .task-composer,
+  .workflow-panel,
+  .runs-panel,
+  .topbar {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .task-composer h2,
+  .run-title,
+  .step-label {
+    overflow-wrap: anywhere;
   }
 
   .topbar,

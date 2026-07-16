@@ -12,6 +12,7 @@ import type {
 } from "@pi-workflow/application-service";
 import type {
   ApprovalDecision,
+  WorkflowApproval,
   WorkflowDefinition,
   WorkflowRunEvent,
   WorkflowRunRecord,
@@ -99,6 +100,10 @@ export class DesktopRuntimeClient {
 
   listRunEvents(runId: string): Promise<WorkflowRunEvent[]> {
     return this.request("run.events", { runId });
+  }
+
+  listApprovals(runId: string): Promise<WorkflowApproval[]> {
+    return this.request("approval.list", { runId });
   }
 
   createRun(input: CreateRunInput): Promise<RunStateCommitResult> {
